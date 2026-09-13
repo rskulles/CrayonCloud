@@ -128,7 +128,7 @@ img{{max-width:100%;margin-top:1rem;border-radius:.5rem}} .row{{display:flex;gap
 <body><h1>Crayon Cloud</h1>
 <p>Serving <b>{escape(status.model)}</b> with the {escape(status.engine)} engine, version {__version__}.
 Point ButterKnife (or anything that speaks the OpenAI images API) at <code>{{origin}}/v1</code>.</p>
-<form id="f"><textarea name="prompt" rows="3" placeholder="A butter knife spreading a sunrise over toast"></textarea>
+<form id="f"><textarea name="prompt" rows="3" required placeholder="A butter knife spreading a sunrise over toast"></textarea>
 <div class="row"><input name="size" value="1024x1024"><input name="steps" value="{status and 8}" placeholder="steps"><input name="seed" placeholder="seed (random)"></div>
 <button>Generate</button> <span id="s"></span></form>
 <img id="out" alt="">
@@ -138,7 +138,7 @@ const f=document.getElementById('f'), s=document.getElementById('s'), out=docume
 f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed?+d.seed:undefined}};
 s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
 try{{const r=await fetch('/v1/images/generations',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}); const j=await r.json(); clearInterval(tick);
-if(!r.ok){{s.textContent=j.detail||'failed';return;}} out.src='data:image/png;base64,'+j.data[0].b64_json; s.textContent=j.crayoncloud.seconds+' s, seed '+j.data[0].seed;}}catch(err){{clearInterval(tick); s.textContent=err;}} }};
+if(!r.ok){{const d=j.detail; s.textContent=typeof d==='string'?d:Array.isArray(d)?d.map(x=>x.msg||JSON.stringify(x)).join('; '):(d?JSON.stringify(d):'failed ('+r.status+')');return;}} out.src='data:image/png;base64,'+j.data[0].b64_json; s.textContent=j.crayoncloud.seconds+' s, seed '+j.data[0].seed;}}catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} }};
 </script></body></html>"""
 
     return app
