@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crayoncloud"
+version = "0.1.0"
+description = "A small self-hosted image generation server for Z-Image-Turbo with an OpenAI-compatible endpoint, built for ButterKnife."
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+license = { file = "LICENSE.md" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pillow>=10",
+]
+
+[project.optional-dependencies]
+# Apple Silicon: MLX through mflux. This is the fast path and the default on a Mac.
+mlx = ["mflux>=0.19"]
+# Linux / Windows with a CUDA card (or anything else, slowly, on CPU): PyTorch through diffusers.
+cuda = ["diffusers>=0.36", "torch>=2.4", "transformers>=4.51", "accelerate>=1.0", "sentencepiece"]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+crayoncloud = "crayoncloud.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["crayoncloud*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
