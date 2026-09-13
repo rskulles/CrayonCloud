@@ -19,7 +19,8 @@ swiftc -O -target "$(uname -m)-apple-macos13.0" -framework AppKit -o "$APP/Conte
 
 # The package source: pip installs it (with the mlx extra) into ~/Library/Application Support/CrayonCloud/venv on first launch.
 cp -R "$HERE/crayoncloud" "$RES/crayoncloud-src/crayoncloud"
-cp "$HERE/pyproject.toml" "$HERE/README.md" "$HERE/LICENSE.md" "$RES/crayoncloud-src/"
+cp "$HERE/pyproject.toml" "$HERE/README.md" "$HERE/LICENSE.md" "$HERE/THIRD-PARTY-NOTICES.md" "$RES/crayoncloud-src/"
+cp "$HERE/LICENSE.md" "$HERE/THIRD-PARTY-NOTICES.md" "$RES/"
 find "$RES/crayoncloud-src" -name "__pycache__" -type d -prune -exec rm -rf {} +
 
 # Icons: the app icon from the 1024 px render, the menu bar icon as a template image.

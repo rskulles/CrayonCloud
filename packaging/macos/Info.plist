@@ -15,7 +15,7 @@
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <!-- A server with a tiny web page: lives in the menu bar, no Dock icon. -->
     <key>LSUIElement</key><true/>
-    <key>NSHumanReadableCopyright</key><string>Copyright Roy Skullestad. PolyForm Noncommercial License 1.0.0.</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Roy Skullestad. MIT License.</string>
     <key>NSLocalNetworkUsageDescription</key><string>Crayon Cloud can serve pictures to ButterKnife and other devices on your local network.</string>
 </dict>
 </plist>

@@ -117,10 +117,11 @@ crayoncloud serve --engine fake  # the API without a model, for development
 
 ## License
 
-Crayon Cloud is **source-available, not open source**, under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.md), the same terms as ButterKnife. Noncommercial use is free; commercial
-use needs written permission. The model weights and the libraries it runs on keep their own licences: Z-Image-Turbo is
-Apache 2.0, mflux is MIT, diffusers is Apache 2.0, and the try-it page uses [Pico CSS](https://picocss.com) 2.1.1 (MIT,
-copyright 2019-2025 Pico CSS), shipped inside the package.
+Crayon Cloud is open source under the [MIT License](LICENSE.md). Do what you like with it; keep the notice.
 
-Copyright Roy S.
+It is built on other people's open-source work, all of it permissive: mflux and MLX (MIT), Diffusers and the Hugging
+Face libraries (Apache 2.0), PyTorch, Starlette and Uvicorn (BSD), FastAPI and Pydantic (MIT), Pillow (MIT-CMU), and
+Pico CSS (MIT) for the try-it page. The Z-Image models from Tongyi Lab are Apache 2.0 and download straight from
+Hugging Face. Every one of them is credited, with links and licences, in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+Copyright (c) 2026 Roy Skullestad
