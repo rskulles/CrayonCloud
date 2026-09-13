@@ -24,10 +24,13 @@ jobs:
             runner: macos-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"   # the package pins < 3.14 (mflux); the runner's default python3 is newer
 
       - name: Tests
         run: |
-          python3 -m venv .venv && . .venv/bin/activate
+          python -m venv .venv && . .venv/bin/activate
           pip install -q -e ".[dev]"
           python -m pytest -q
 
