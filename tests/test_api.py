@@ -11,13 +11,37 @@ from crayoncloud.service import ImageService
 
 
 @pytest.fixture
-def client():
+def client(tmp_path):
     engine = FakeEngine()
     service = ImageService(engine, idle_unload_seconds=None)
-    app = create_app(service, default_steps=8)
+    app = create_app(service, default_steps=8, assets_dir=tmp_path / "assets")
     with TestClient(app) as client:
         client.engine = engine
+        client.assets = tmp_path / "assets"
         yield client
+
+
+def test_pictures_are_kept_with_their_prompt_in_the_metadata(client):
+    body = client.post("/v1/images/generations", json={"prompt": "keep me", "size": "256x256", "seed": 9}).json()
+
+    saved = body["data"][0]["file"]
+    assert saved.startswith(str(client.assets)) and saved.endswith("-9.png")
+    image = Image.open(saved)
+    assert image.size == (256, 256)
+    assert image.text["prompt"] == "keep me" and image.text["seed"] == "9" and image.text["steps"] == "8"
+    assert client.get("/health").json()["assets"] == str(client.assets)
+    assert "Pictures are kept in" in client.get("/").text
+
+    again = client.post("/v1/images/generations", json={"prompt": "keep me", "size": "256x256", "seed": 9}).json()
+    assert again["data"][0]["file"] != saved  # same second and seed still gets its own file
+
+
+def test_no_assets_dir_means_nothing_is_written(tmp_path):
+    app = create_app(ImageService(FakeEngine(), idle_unload_seconds=None), assets_dir=None)
+    with TestClient(app) as client:
+        body = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256"}).json()
+        assert "file" not in body["data"][0]
+        assert client.get("/health").json()["assets"] is None
 
 
 def test_generation_returns_png_and_metadata(client):

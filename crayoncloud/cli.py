@@ -29,6 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--preload", action="store_true", help="load the model at start instead of on the first request")
     serve.add_argument("--idle-unload", type=float, default=30.0, metavar="MINUTES", help="unload the model after this many idle minutes; 0 keeps it loaded")
     serve.add_argument("--parent-pid", type=int, help="stop when this process is gone (the macOS menu bar helper passes its own pid)")
+    serve.add_argument("--assets", metavar="DIR", help="folder to keep every rendered picture in (default: ~/Pictures/Crayon Cloud)")
+    serve.add_argument("--no-save", action="store_true", help="do not keep rendered pictures on disk")
 
     gen = sub.add_parser("generate", help="make one image from the command line")
     engine_args(gen)
@@ -66,11 +68,14 @@ def main(argv: list[str] | None = None) -> int:
 
     import uvicorn
 
-    from .api import create_app
+    from pathlib import Path
+
+    from .api import create_app, default_assets_dir
     from .service import ImageService
 
     service = ImageService(engine, idle_unload_seconds=None if args.idle_unload <= 0 else args.idle_unload * 60)
-    app = create_app(service, default_steps=args.steps, preload=args.preload)
+    assets = None if args.no_save else Path(args.assets).expanduser() if args.assets else default_assets_dir()
+    app = create_app(service, default_steps=args.steps, preload=args.preload, assets_dir=assets)
     host = "0.0.0.0" if args.lan else args.host
     if args.parent_pid:
         watch_parent(args.parent_pid)
@@ -80,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     lan = f" (on your network: http://{lan_address()}:{args.port}/)" if host == "0.0.0.0" and lan_address() else ""
     print(f"Crayon Cloud {__version__} ({engine.model} via {engine.name}) is running at {local}{lan}", flush=True)
     print(f"ButterKnife base URL: {local}v1{' or the network address above with /v1' if lan else ''}", flush=True)
+    if assets is not None:
+        print(f"Pictures are kept in {assets}", flush=True)
     uvicorn.run(app, host=host, port=args.port, log_level="info")
     return 0
 

@@ -53,6 +53,8 @@ In ButterKnife, add a connection of kind *Image generation* with the base URL `h
 | `--steps` | 8 | Diffusion steps when a request does not say; Turbo is tuned for 8 or 9 |
 | `--preload` | off | Load the model at start instead of on the first request |
 | `--idle-unload` | 30 | Minutes of quiet before the model is unloaded; 0 keeps it loaded |
+| `--assets` | ~/Pictures/Crayon Cloud | Folder every rendered picture is kept in, with the prompt, seed and steps in the PNG's metadata |
+| `--no-save` | off | Keep nothing on disk; pictures only go back to the caller |
 | `--parent-pid` | | Stop when that process is gone (the menu bar app passes its own pid) |
 
 There is also a one-off mode for the command line:
@@ -64,8 +66,8 @@ crayoncloud generate "a butter knife spreading a sunrise over toast" --size 1280
 ## Menu bar app for a Mac
 
 If you'd rather not think about terminals, build the menu bar app once and keep it in Applications. It shows a small
-cloud in the menu bar with the server's state, and has *Open*, *Copy address for ButterKnife*, a switch for reaching
-it from the network, the log, and *Quit*.
+cloud in the menu bar with the server's state, and has *Open*, *Copy address for ButterKnife*, *Open Assets Folder*
+(where every rendered picture is kept), a switch for reaching it from the network, the log, and *Quit*.
 
 You need the Xcode Command Line Tools (`xcode-select --install`) and a Python 3.10 to 3.13 that the app can find:
 Homebrew's (`brew install python@3.12`), python.org's, or MacPorts'.
@@ -97,7 +99,7 @@ the Z-Image folders under `~/.cache/huggingface/hub`.
 ```
 
 The answer carries the PNG as `data[0].b64_json` (the only supported `response_format`), the seed used for each
-image, and a `crayoncloud` block with the model, size, steps and seconds taken. `GET /v1/models` lists the model,
+image, the `file` it was saved as, and a `crayoncloud` block with the model, size, steps and seconds taken. `GET /v1/models` lists the model,
 `GET /health` (or `/v1/status`) says whether it is loaded, busy and for how long. Sizes are rounded to multiples of 16
 between 256 and 2048. Requests queue; one image renders at a time.
 

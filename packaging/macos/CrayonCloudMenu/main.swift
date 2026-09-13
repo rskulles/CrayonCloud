@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var openItem: NSMenuItem!
     private var copyItem: NSMenuItem!
     private var lanItem: NSMenuItem!
+    private var assetsItem: NSMenuItem!
+    private var assetsUrl: URL?
     private var server: Process?
     private var localUrl = URL(string: "http://127.0.0.1:8765/")!
     private var lanUrl: URL?
@@ -75,6 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         copyItem = NSMenuItem(title: "Copy address for ButterKnife", action: #selector(copyAddress), keyEquivalent: "c")
         copyItem.target = self
         copyItem.isEnabled = false
+        assetsItem = NSMenuItem(title: "Open Assets Folder", action: #selector(openAssets), keyEquivalent: "a")
+        assetsItem.target = self
+        assetsItem.isEnabled = false
         lanItem = NSMenuItem(title: "Reachable on the local network", action: #selector(toggleLan), keyEquivalent: "")
         lanItem.target = self
         lanItem.state = lanEnabled ? .on : .off
@@ -86,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(openItem)
         menu.addItem(copyItem)
+        menu.addItem(assetsItem)
         menu.addItem(lanItem)
         menu.addItem(.separator())
         menu.addItem(logItem)
@@ -270,8 +276,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let busy = json["busy"] as? Bool ?? false
             let seconds = json["seconds_busy"] as? Double
             let model = json["model"] as? String ?? "model"
+            let assets = json["assets"] as? String
             let text = busy ? "Rendering… \(Int(seconds ?? 0)) s" : loaded ? "Ready (\(model) loaded)" : "Ready (\(model) loads on the first picture)"
-            DispatchQueue.main.async { self.setStatus(text) }
+            DispatchQueue.main.async {
+                self.setStatus(text)
+                if let assets = assets {
+                    self.assetsUrl = URL(fileURLWithPath: assets)
+                    self.assetsItem.isEnabled = true
+                }
+            }
         }.resume()
     }
 
@@ -296,6 +309,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(base.hasSuffix("/") ? base + "v1" : base + "/v1", forType: .string)
+    }
+
+    /// The folder the server keeps rendered pictures in (~/Pictures/Crayon Cloud unless told otherwise); created if empty.
+    @objc private func openAssets() {
+        guard let url = assetsUrl else { return }
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func toggleLan() {

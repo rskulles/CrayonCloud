@@ -50,7 +50,33 @@ def parse_size(size: str) -> tuple[int, int]:
     return (round(w / STEP) * STEP, round(h / STEP) * STEP)
 
 
-def create_app(service: ImageService, default_steps: int = 8, preload: bool = False) -> FastAPI:
+def default_assets_dir() -> Path:
+    """Where rendered pictures are kept: the Pictures folder, so they show up where people look for images."""
+    return Path.home() / "Pictures" / "Crayon Cloud"
+
+
+def save_asset(assets_dir: Path, image, prompt: str, seed: int, steps: int, model: str) -> Path:
+    """Writes the PNG with the prompt and settings in its text chunks, named by time and seed."""
+    from PIL import PngImagePlugin
+
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    info = PngImagePlugin.PngInfo()
+    info.add_text("prompt", prompt)
+    info.add_text("seed", str(seed))
+    info.add_text("steps", str(steps))
+    info.add_text("model", model)
+    info.add_text("software", f"Crayon Cloud {__version__}")
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = assets_dir / f"{stamp}-{seed}.png"
+    counter = 1
+    while path.exists():
+        counter += 1
+        path = assets_dir / f"{stamp}-{seed}-{counter}.png"
+    image.save(path, format="PNG", pnginfo=info)
+    return path
+
+
+def create_app(service: ImageService, default_steps: int = 8, preload: bool = False, assets_dir: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import asyncio
@@ -69,7 +95,7 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
     @app.get("/health")
     @app.get("/v1/status")
     def health():
-        return {"ok": True, "version": __version__, **asdict(service.status())}
+        return {"ok": True, "version": __version__, "assets": None if assets_dir is None else str(assets_dir), **asdict(service.status())}
 
     @app.get("/v1/models")
     def models():
@@ -103,7 +129,13 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
             seconds_total += seconds
             buffer = io.BytesIO()
             image.save(buffer, format="PNG")
-            data.append({"b64_json": base64.b64encode(buffer.getvalue()).decode("ascii"), "seed": request.seed})
+            entry = {"b64_json": base64.b64encode(buffer.getvalue()).decode("ascii"), "seed": request.seed}
+            if assets_dir is not None:
+                try:
+                    entry["file"] = str(save_asset(assets_dir, image, request.prompt, request.seed, steps, service.engine.model))
+                except OSError as exc:  # a full disk or a missing Pictures folder must not lose the picture
+                    entry["file_error"] = str(exc)
+            data.append(entry)
 
         return JSONResponse(
             {
@@ -145,7 +177,7 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
   <progress id="p" hidden></progress>
 </form>
 <figure id="fig" hidden><img id="out" alt="Generated image"><figcaption id="cap"></figcaption></figure>
-<footer><small>Requests queue and render one at a time. The model loads on the first picture and unloads after a while of quiet.</small></footer>
+<footer><small>Requests queue and render one at a time. The model loads on the first picture and unloads after a while of quiet.{(" Pictures are kept in <code>" + escape(str(assets_dir)) + "</code>.") if assets_dir else ""}</small></footer>
 </main>
 <script>
 document.getElementById('base').textContent = location.origin + '/v1';
@@ -154,7 +186,7 @@ f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormDat
 f.querySelector('button').disabled=true; p.hidden=false; s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
 try{{const r=await fetch('/v1/images/generations',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}); const j=await r.json(); clearInterval(tick);
 if(!r.ok){{const x=j.detail; s.textContent=typeof x==='string'?x:Array.isArray(x)?x.map(y=>y.msg||JSON.stringify(y)).join('; '):(x?JSON.stringify(x):'failed ('+r.status+')');return;}}
-out.src='data:image/png;base64,'+j.data[0].b64_json; fig.hidden=false; cap.textContent=d.prompt+' — '+j.crayoncloud.width+'×'+j.crayoncloud.height+', '+j.crayoncloud.steps+' steps, seed '+j.data[0].seed+', '+j.crayoncloud.seconds+' s'; s.textContent='';}}
+out.src='data:image/png;base64,'+j.data[0].b64_json; fig.hidden=false; cap.textContent=d.prompt+' — '+j.crayoncloud.width+'×'+j.crayoncloud.height+', '+j.crayoncloud.steps+' steps, seed '+j.data[0].seed+', '+j.crayoncloud.seconds+' s'+(j.data[0].file?' — saved as '+j.data[0].file.split('/').pop():''); s.textContent='';}}
 catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} finally{{p.hidden=true; f.querySelector('button').disabled=false;}} }};
 </script></body></html>"""
 
