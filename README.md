@@ -26,10 +26,11 @@ and answers the same request shape as the OpenAI images API, so [ButterKnife](ht
 Two ways: the menu bar app on a Mac (nothing to install first), or `pip` anywhere. Either way the model needs about
 30 GB of disk (20 GB downloaded, 10 GB quantised) and arrives on the first picture.
 
-### The menu bar app (macOS)
+### The menu bar app (macOS, Apple Silicon only)
 
 Download the disk image from the [Releases page](https://github.com/rskulles/CrayonCloud/releases), drag Crayon Cloud
-to Applications and open it. A small cloud appears in the menu bar with the server's state, and the menu has *Open*,
+to Applications and open it. It needs an M-series Mac: the model runs through MLX, which has no Intel build, and an
+Intel Mac's graphics card is too small for it anyway. On x86 the realistic route is Linux with an NVIDIA card, below. A small cloud appears in the menu bar with the server's state, and the menu has *Open*,
 *Copy network address for ButterKnife*, *Open Assets Folder*, a switch for reaching it from the network, the log and
 *Quit*.
 
