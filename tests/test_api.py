@@ -87,6 +87,7 @@ def test_models_and_status(client):
     page = client.get("/").text
     assert "Crayon Cloud" in page and "pico.classless.min.css" in page
     assert client.get("/static/pico.classless.min.css").status_code == 200
+    assert client.get("/static/icon.svg").status_code == 200 and 'icon.svg' in page
 
 
 @pytest.mark.parametrize("size,expected", [("1024x1024", (1024, 1024)), ("1000x700", (992, 704)), ("768×1280", (768, 1280))])

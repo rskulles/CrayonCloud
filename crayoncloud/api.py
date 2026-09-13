@@ -160,10 +160,18 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
         status = service.status()
         return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Crayon Cloud</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">
-<link rel="stylesheet" href="/static/pico.classless.min.css">
-<style>figure img{{border-radius:var(--pico-border-radius)}} progress{{margin-top:1rem}} .status{{margin-left:.75rem}}</style></head>
+<link rel="stylesheet" href="/static/pico.classless.min.css"><link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<style>
+figure img{{border-radius:var(--pico-border-radius)}} .status{{margin-left:.75rem}}
+header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;height:4.5rem;flex:none}} header hgroup{{margin:0}}
+/* The rendering indicator: three columns of dots falling like the rain on the icon. */
+.rain{{display:none;gap:.55rem;height:2.2rem;margin:1rem 0 0 .2rem}} .rain.on{{display:flex}}
+.rain span{{display:block;width:.55rem;height:.55rem;border-radius:50%;animation:fall 1.2s linear infinite}}
+.rain i{{display:flex;flex-direction:column;gap:.35rem}} .rain i:nth-child(3n+1) span{{background:#ff4b4b}} .rain i:nth-child(3n+2) span{{background:#3ddc6a;animation-delay:.4s}} .rain i:nth-child(3n) span{{background:#4aa8ff;animation-delay:.8s}}
+@keyframes fall{{0%{{opacity:0;transform:translateY(-.6rem)}}30%{{opacity:1}}100%{{opacity:0;transform:translateY(.9rem)}}}}
+</style></head>
 <body><main>
-<header><hgroup><h1>Crayon Cloud</h1>
+<header><img src="/static/icon.svg" alt=""><hgroup><h1>Crayon Cloud</h1>
 <p>Serving <strong>{escape(status.model)}</strong> with the {escape(status.engine)} engine, version {__version__}.</p></hgroup></header>
 <p>Point ButterKnife, or anything that speaks the OpenAI images API, at <code id="base">/v1</code>.</p>
 <form id="f">
@@ -174,7 +182,7 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
     <label>Seed<input name="seed" type="number" min="0" placeholder="random"></label>
   </fieldset>
   <button type="submit">Generate</button><small class="status" id="s"></small>
-  <progress id="p" hidden></progress>
+  <div class="rain" id="p" aria-hidden="true"><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i></div>
 </form>
 <figure id="fig" hidden><img id="out" alt="Generated image"><figcaption id="cap"></figcaption></figure>
 <footer><small>Requests queue and render one at a time. The model loads on the first picture and unloads after a while of quiet.{(" Pictures are kept in <code>" + escape(str(assets_dir)) + "</code>.") if assets_dir else ""}</small></footer>
@@ -183,11 +191,11 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
 document.getElementById('base').textContent = location.origin + '/v1';
 const f=document.getElementById('f'), s=document.getElementById('s'), p=document.getElementById('p'), out=document.getElementById('out'), fig=document.getElementById('fig'), cap=document.getElementById('cap');
 f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed!==''?+d.seed:undefined}};
-f.querySelector('button').disabled=true; p.hidden=false; s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
+f.querySelector('button').disabled=true; p.classList.add('on'); s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
 try{{const r=await fetch('/v1/images/generations',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}); const j=await r.json(); clearInterval(tick);
 if(!r.ok){{const x=j.detail; s.textContent=typeof x==='string'?x:Array.isArray(x)?x.map(y=>y.msg||JSON.stringify(y)).join('; '):(x?JSON.stringify(x):'failed ('+r.status+')');return;}}
 out.src='data:image/png;base64,'+j.data[0].b64_json; fig.hidden=false; cap.textContent=d.prompt+' — '+j.crayoncloud.width+'×'+j.crayoncloud.height+', '+j.crayoncloud.steps+' steps, seed '+j.data[0].seed+', '+j.crayoncloud.seconds+' s'+(j.data[0].file?' — saved as '+j.data[0].file.split('/').pop():''); s.textContent='';}}
-catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} finally{{p.hidden=true; f.querySelector('button').disabled=false;}} }};
+catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} finally{{p.classList.remove('on'); f.querySelector('button').disabled=false;}} }};
 </script></body></html>"""
 
     return app
