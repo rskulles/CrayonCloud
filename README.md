@@ -23,8 +23,8 @@ and answers the same request shape as the OpenAI images API, so [ButterKnife](ht
 
 ## Get it running
 
-Two ways: the menu bar app on a Mac (nothing to install first), or `pip` anywhere. Either way the model needs about
-30 GB of disk (20 GB downloaded, 10 GB quantised) and arrives on the first picture.
+Two ways: the menu bar app on a Mac (nothing to install first), or `pip` anywhere. Either way the model arrives on
+the first picture: a 10 GB download of the ready-made 8-bit copy, kept under `~/.cache/huggingface`.
 
 ### The menu bar app (macOS, Apple Silicon only)
 
@@ -44,9 +44,9 @@ another machine: the menu shows the address other devices use (*On your network:
 network address for ButterKnife* puts exactly that on the clipboard. Switch off *Reachable on the local network* to
 keep it to this Mac. macOS asks once for local-network permission the first time.
 
-To uninstall, delete the app and `~/Library/Application Support/CrayonCloud`; add `~/.cache/crayoncloud` and the
-Z-Image folders under `~/.cache/huggingface/hub` if you want the model gone too. Your pictures stay in
-`~/Pictures/Crayon Cloud`.
+To uninstall, delete the app and `~/Library/Application Support/CrayonCloud`; add the Z-Image folders under
+`~/.cache/huggingface/hub` (and `~/.cache/crayoncloud`, if it exists) if you want the model gone too. Your pictures
+stay in `~/Pictures/Crayon Cloud`.
 
 ### From the command line (any platform)
 
@@ -59,11 +59,16 @@ pip install "crayoncloud[cuda] @ git+https://github.com/rskulles/CrayonCloud"   
 crayoncloud serve
 ```
 
-That starts it at <http://127.0.0.1:8765/>. Open that page to try a prompt by hand. The first request downloads
-Z-Image-Turbo from Hugging Face (about 20 GB, a few minutes on a fast line), quantises it and saves the quantised
-copy (10 GB) under `~/.cache/crayoncloud`; from then on the model loads in about a second. Set `CRAYONCLOUD_CACHE`
-to keep that copy somewhere else. Pictures are kept in `~/Pictures/Crayon Cloud` unless you say `--assets` or
-`--no-save`.
+That starts it at <http://127.0.0.1:8765/>. Open that page to try a prompt by hand. The first request downloads the
+8-bit Z-Image-Turbo (about 10 GB, a few minutes on a fast line) and from then on the model loads in about a second.
+Pictures are kept in `~/Pictures/Crayon Cloud` unless you say `--assets` or `--no-save`.
+
+**Where the weights come from.** Crayon Cloud tries, in order: [rskulles/z-image-turbo-mflux-q8](https://huggingface.co/rskulles/z-image-turbo-mflux-q8),
+a copy quantised by this project's author, pinned to a known commit; then the mflux community's
+[z-image-turbo-mflux-q8](https://huggingface.co/mflux-community/z-image-turbo-mflux-q8), also pinned; then the
+original [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) weights (20 GB), quantised on
+your machine and saved under `~/.cache/crayoncloud`. `--quantize-locally` skips straight to the last step; the
+`/health` route says which source is in use. Once any of them has been fetched, nothing is downloaded again.
 
 To let other machines use it, including a ButterKnife running elsewhere on your Wi‑Fi:
 
@@ -81,7 +86,8 @@ In ButterKnife, add a connection of kind *Image generation* with the base URL `h
 | `--lan` | off | Listen on every interface instead of localhost only |
 | `--engine` | auto | `mflux` (MLX) on Apple Silicon, `diffusers` (PyTorch) elsewhere, `fake` for a placeholder |
 | `--model` | z-image-turbo | `z-image` for the slower, non-distilled base model |
-| `--quantize` | 8 | MLX weight quantisation: 8 halves the memory with no visible loss; 4 halves it again |
+| `--quantize` | 8 | MLX weight quantisation: 8 halves the memory with no visible loss; 4 halves it again (ready-made copies exist for 3 to 8) |
+| `--quantize-locally` | off | Ignore the ready-made copies and quantise the full-precision weights on this machine |
 | `--steps` | 8 | Diffusion steps when a request does not say; Turbo is tuned for 8 or 9 |
 | `--preload` | off | Load the model at start instead of on the first request |
 | `--idle-unload` | 30 | Minutes of quiet before the model is unloaded; 0 keeps it loaded |
@@ -106,7 +112,7 @@ machine it runs on. The app is about 70 MB.
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.1.6 dist      # the version goes into the bundle
+tools/make-macos-app.sh 0.1.7 dist      # the version goes into the bundle
 open dist                               # drag "Crayon Cloud.app" to Applications
 ```
 

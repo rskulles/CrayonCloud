@@ -94,3 +94,14 @@ def test_models_and_status(client):
 @pytest.mark.parametrize("size,expected", [("1024x1024", (1024, 1024)), ("1000x700", (992, 704)), ("768×1280", (768, 1280))])
 def test_parse_size_rounds_to_multiples_of_16(size, expected):
     assert parse_size(size) == expected
+
+
+def test_prebuilt_sources_are_ordered_and_only_for_known_bit_widths():
+    from crayoncloud.engines.mflux_engine import prebuilt_sources
+
+    q8 = prebuilt_sources("z-image-turbo", 8)
+    assert q8[0][0] == "rskulles/z-image-turbo-mflux-q8"
+    assert q8[1][0] == "mflux-community/z-image-turbo-mflux-q8" and q8[1][1]
+    assert prebuilt_sources("z-image-turbo", None) == []
+    assert prebuilt_sources("z-image", 8) == []
+    assert prebuilt_sources("z-image-turbo", 7) == []

@@ -95,7 +95,7 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
     @app.get("/health")
     @app.get("/v1/status")
     def health():
-        return {"ok": True, "version": __version__, "assets": None if assets_dir is None else str(assets_dir), **asdict(service.status())}
+        return {"ok": True, "version": __version__, "assets": None if assets_dir is None else str(assets_dir), "source": getattr(service.engine, "source", None), **asdict(service.status())}
 
     @app.get("/v1/models")
     def models():

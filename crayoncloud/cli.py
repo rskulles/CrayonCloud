@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--model", default="z-image-turbo", help="z-image-turbo (default) or z-image")
         p.add_argument("--quantize", type=int, default=8, choices=[3, 4, 5, 6, 8, 16], help="MLX weight quantisation; 16 means none (mflux only)")
         p.add_argument("--steps", type=int, default=8, help="default diffusion steps when a request does not say")
+        p.add_argument("--quantize-locally", action="store_true", help="skip the ready-made quantised copies on Hugging Face and quantise the full weights here (mflux only)")
 
     serve = sub.add_parser("serve", help="run the HTTP server")
     engine_args(serve)
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     from .engines import GenerationRequest, pick_engine
 
     quantize = None if args.quantize == 16 else args.quantize
-    engine = pick_engine(args.engine, args.model, quantize)
+    engine = pick_engine(args.engine, args.model, quantize, prebuilt=not args.quantize_locally)
     if getattr(engine, "quantized_path", None) is not None:
         log = logging.getLogger("crayoncloud")
         log.info("quantised weights cache: %s (set CRAYONCLOUD_CACHE to move it)", engine.quantized_path)
