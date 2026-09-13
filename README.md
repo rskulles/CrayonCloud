@@ -4,7 +4,9 @@ A small image generation server for your own machine. It runs [Z-Image-Turbo](ht
 and answers the same request shape as the OpenAI images API, so [ButterKnife](https://github.com/rskulles/ButterKnife)
 (and anything else that speaks that API) can ask it for pictures. Nothing leaves your network.
 
-![Crayon Cloud icon: a white cloud raining a dot matrix of red, green and blue](packaging/icon.png)
+![A white cloud over a sunlit meadow, raining tiny red, green and blue crayons; made by Crayon Cloud on an M4 Pro](docs/sample.png)
+
+*"A fluffy white cloud raining tiny red, green and blue crayons over a sunlit meadow, storybook illustration." Z-Image-Turbo, seed 42, 8 steps, on an M4 Pro.*
 
 ## Why
 
