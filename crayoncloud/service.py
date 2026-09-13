@@ -8,6 +8,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
 from PIL import Image
 
@@ -27,6 +28,7 @@ class Status:
     generated: int
     last_seconds: float | None
     idle_unload_seconds: float | None
+    loras: list[str]
 
 
 class ImageService:
@@ -106,6 +108,7 @@ class ImageService:
             generated=self._generated,
             last_seconds=None if self._last_seconds is None else round(self._last_seconds, 1),
             idle_unload_seconds=self.idle_unload_seconds,
+            loras=[f"{Path(p).stem} x{s:g}" for p, s in getattr(self.engine, "loras", ())],
         )
 
     def close(self) -> None:

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crayoncloud"
-version = "0.1.7"
+version = "0.1.8"
 description = "A small self-hosted image generation server for Z-Image-Turbo with an OpenAI-compatible endpoint, built for ButterKnife."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"

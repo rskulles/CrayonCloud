@@ -14,6 +14,8 @@ class GenerationRequest:
     steps: int = 8
     seed: int = 0
     negative_prompt: str | None = None
+    # (absolute path, scale) pairs, already resolved by the API from names in the LoRA folder. Order matters.
+    loras: tuple[tuple[str, float], ...] = ()
 
 
 class Engine(Protocol):

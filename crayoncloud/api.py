@@ -20,15 +20,22 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .engines import GenerationRequest
+from .loras import LoraLibrary
 from .service import ImageService
 
 MIN_SIDE, MAX_SIDE, STEP = 256, 2048, 16
+
+
+class LoraSpec(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    scale: float = Field(default=1.0, ge=-2.0, le=3.0)
 
 
 class ImagesRequest(BaseModel):
     """OpenAI's images/generations body plus a few extras local models care about."""
 
     prompt: str = Field(min_length=1, max_length=4000)
+    loras: list[LoraSpec] | None = Field(default=None, max_length=4)
     model: str | None = None
     n: int = Field(default=1, ge=1, le=4)
     size: str = "1024x1024"
@@ -76,7 +83,8 @@ def save_asset(assets_dir: Path, image, prompt: str, seed: int, steps: int, mode
     return path
 
 
-def create_app(service: ImageService, default_steps: int = 8, preload: bool = False, assets_dir: Path | None = None) -> FastAPI:
+def create_app(service: ImageService, default_steps: int = 8, preload: bool = False, assets_dir: Path | None = None, loras: LoraLibrary | None = None) -> FastAPI:
+    library = loras or LoraLibrary(Path.home() / ".nonexistent-crayoncloud-loras")
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import asyncio
@@ -95,7 +103,12 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
     @app.get("/health")
     @app.get("/v1/status")
     def health():
-        return {"ok": True, "version": __version__, "assets": None if assets_dir is None else str(assets_dir), "source": getattr(service.engine, "source", None), **asdict(service.status())}
+        return {"ok": True, "version": __version__, "assets": None if assets_dir is None else str(assets_dir), "source": getattr(service.engine, "source", None), "loras_folder": str(library.folder), **asdict(service.status())}
+
+    @app.get("/v1/loras")
+    def list_loras():
+        """The adapters in the LoRA folder, by name; ask for them with the `loras` field of a generation request."""
+        return {"object": "list", "folder": str(library.folder), "data": [{"name": l.name, "file": l.file, "size": l.size} for l in library.list()]}
 
     @app.get("/v1/models")
     def models():
@@ -109,6 +122,12 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
             raise HTTPException(404, f"this server runs {service.engine.model!r}, not {body.model!r}")
         width, height = parse_size(body.size)
         steps = body.steps or default_steps
+        chosen: list[tuple[str, float]] = []
+        for spec in body.loras or []:
+            try:
+                chosen.append((str(library.resolve(spec.name)), spec.scale))
+            except KeyError:
+                raise HTTPException(404, f"no LoRA called {spec.name!r} in {library.folder}; see /v1/loras") from None
         first_seed = body.seed if body.seed is not None else random.randrange(2**31 - 1)
 
         data = []
@@ -121,6 +140,7 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
                 steps=steps,
                 seed=first_seed + i,
                 negative_prompt=body.negative_prompt,
+                loras=tuple(chosen),
             )
             try:
                 image, seconds = await service.generate(request)
@@ -148,6 +168,7 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
                     "height": height,
                     "steps": steps,
                     "seconds": round(seconds_total, 1),
+                    "loras": [{"name": Path(p).stem, "scale": s} for p, s in chosen],
                 },
             }
         )
@@ -181,6 +202,7 @@ header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;heig
     <label>Steps<input name="steps" type="number" min="1" max="100" value="{default_steps}"></label>
     <label>Seed<input name="seed" type="number" min="0" placeholder="random"></label>
   </fieldset>
+  {lora_picker(library)}
   <button type="submit">Generate</button><small class="status" id="s"></small>
   <div class="rain" id="p" aria-hidden="true"><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i></div>
 </form>
@@ -190,12 +212,24 @@ header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;heig
 <script>
 document.getElementById('base').textContent = location.origin + '/v1';
 const f=document.getElementById('f'), s=document.getElementById('s'), p=document.getElementById('p'), out=document.getElementById('out'), fig=document.getElementById('fig'), cap=document.getElementById('cap');
-f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed!==''?+d.seed:undefined}};
+f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed!==''?+d.seed:undefined,loras:d.lora?[{{name:d.lora,scale:+d.lora_scale||1}}]:undefined}};
 f.querySelector('button').disabled=true; p.classList.add('on'); s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
 try{{const r=await fetch('/v1/images/generations',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}); const j=await r.json(); clearInterval(tick);
 if(!r.ok){{const x=j.detail; s.textContent=typeof x==='string'?x:Array.isArray(x)?x.map(y=>y.msg||JSON.stringify(y)).join('; '):(x?JSON.stringify(x):'failed ('+r.status+')');return;}}
-out.src='data:image/png;base64,'+j.data[0].b64_json; fig.hidden=false; cap.textContent=d.prompt+' — '+j.crayoncloud.width+'×'+j.crayoncloud.height+', '+j.crayoncloud.steps+' steps, seed '+j.data[0].seed+', '+j.crayoncloud.seconds+' s'+(j.data[0].file?' — saved as '+j.data[0].file.split('/').pop():''); s.textContent='';}}
+out.src='data:image/png;base64,'+j.data[0].b64_json; fig.hidden=false; cap.textContent=d.prompt+' — '+j.crayoncloud.width+'×'+j.crayoncloud.height+', '+j.crayoncloud.steps+' steps, seed '+j.data[0].seed+', '+j.crayoncloud.seconds+' s'+(j.crayoncloud.loras.length?' — style '+j.crayoncloud.loras.map(l=>l.name+' x'+l.scale).join(', '):'')+(j.data[0].file?' — saved as '+j.data[0].file.split('/').pop():''); s.textContent='';}}
 catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} finally{{p.classList.remove('on'); f.querySelector('button').disabled=false;}} }};
 </script></body></html>"""
 
     return app
+
+
+def lora_picker(library: LoraLibrary) -> str:
+    """A style dropdown for the try-it page when the LoRA folder has something in it, else a hint where to put files."""
+    loras = library.list()
+    if not loras:
+        return f'<small>No styles yet: drop a Z-Image LoRA (<code>.safetensors</code>) into <code>{escape(str(library.folder))}</code> and reload.</small>'
+    options = "".join(f'<option value="{escape(l.name)}">{escape(l.name)}</option>' for l in loras)
+    return f"""<fieldset role="group" style="display:grid;grid-template-columns:2fr 1fr;gap:1rem">
+    <label>Style (LoRA)<select name="lora"><option value="">None</option>{options}</select></label>
+    <label>Strength<input name="lora_scale" type="number" min="-2" max="3" step="0.1" value="1"></label>
+  </fieldset>"""

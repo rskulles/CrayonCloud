@@ -18,6 +18,7 @@ class FakeEngine:
         self.delay = delay
         self._loaded = False
         self.calls: list[GenerationRequest] = []
+        self.loras: tuple[tuple[str, float], ...] = ()
 
     @property
     def loaded(self) -> bool:
@@ -28,6 +29,7 @@ class FakeEngine:
 
     def generate(self, request: GenerationRequest) -> Image.Image:
         self.load()
+        self.loras = request.loras
         self.calls.append(request)
         if self.delay:
             time.sleep(self.delay)

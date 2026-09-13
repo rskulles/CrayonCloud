@@ -93,6 +93,7 @@ In ButterKnife, add a connection of kind *Image generation* with the base URL `h
 | `--idle-unload` | 30 | Minutes of quiet before the model is unloaded; 0 keeps it loaded |
 | `--assets` | ~/Pictures/Crayon Cloud | Folder every rendered picture is kept in, with the prompt, seed and steps in the PNG's metadata |
 | `--no-save` | off | Keep nothing on disk; pictures only go back to the caller |
+| `--loras` | see Styles | Folder of `.safetensors` adapters offered by name |
 | `--parent-pid` | | Stop when that process is gone (the menu bar app passes its own pid) |
 
 There is also a one-off mode for the command line:
@@ -112,7 +113,7 @@ machine it runs on. The app is about 70 MB.
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.1.7 dist      # the version goes into the bundle
+tools/make-macos-app.sh 0.1.8 dist      # the version goes into the bundle
 open dist                               # drag "Crayon Cloud.app" to Applications
 ```
 
@@ -120,16 +121,26 @@ Add `--dmg` at the end to get a disk image as well. A locally built app is signe
 it: it runs there, but a copy sent to another Mac is refused by Gatekeeper, which is what the notarized release is
 for. Rebuilding with a new version number makes the app reinstall its package on the next launch.
 
+## Styles (LoRAs)
+
+Drop a Z-Image LoRA (a `.safetensors` file) into the LoRA folder, `~/Library/Application Support/CrayonCloud/loras`
+on a Mac (*Open LoRA Folder* in the menu), `~/.config/crayoncloud/loras` elsewhere, or wherever `--loras` points, and
+it appears by its file name: in the try-it page's *Style* dropdown, at `GET /v1/loras`, and in ButterKnife's picture
+style picker. Ask for one with `"loras": [{"name": "watercolor", "scale": 0.8}]` on a request, or `/image a lighthouse
+--lora watercolor:0.8` in ButterKnife. Changing the set of styles reloads the model, about five seconds; renders with
+the same styles after that cost nothing extra. Adapters work on the 8-bit weights directly. mflux engine only.
+
 ## The API
 
 `POST /v1/images/generations` with a JSON body in the OpenAI shape, plus a few extras:
 
 ```json
-{ "prompt": "a red bicycle in the rain", "size": "1024x1024", "n": 1, "steps": 8, "seed": 12345, "negative_prompt": "" }
+{ "prompt": "a red bicycle in the rain", "size": "1024x1024", "n": 1, "steps": 8, "seed": 12345, "negative_prompt": "", "loras": [{"name": "watercolor", "scale": 0.8}] }
 ```
 
 The answer carries the PNG as `data[0].b64_json` (the only supported `response_format`), the seed used for each
-image, the `file` it was saved as, and a `crayoncloud` block with the model, size, steps and seconds taken. `GET /v1/models` lists the model,
+image, the `file` it was saved as, and a `crayoncloud` block with the model, size, steps, seconds taken and the
+styles used. `loras` on the request names adapters from the LoRA folder with an optional `scale` (see Styles). `GET /v1/models` lists the model,
 `GET /health` (or `/v1/status`) says whether it is loaded, busy and for how long. Sizes are rounded to multiples of 16
 between 256 and 2048. Requests queue; one image renders at a time.
 

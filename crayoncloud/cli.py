@@ -32,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--parent-pid", type=int, help="stop when this process is gone (the macOS menu bar helper passes its own pid)")
     serve.add_argument("--assets", metavar="DIR", help="folder to keep every rendered picture in (default: ~/Pictures/Crayon Cloud)")
     serve.add_argument("--no-save", action="store_true", help="do not keep rendered pictures on disk")
+    serve.add_argument("--loras", metavar="DIR", help="folder of .safetensors LoRA adapters offered by name (default: ~/Library/Application Support/CrayonCloud/loras on a Mac, ~/.config/crayoncloud/loras elsewhere)")
 
     gen = sub.add_parser("generate", help="make one image from the command line")
     engine_args(gen)
@@ -72,11 +73,14 @@ def main(argv: list[str] | None = None) -> int:
     from pathlib import Path
 
     from .api import create_app, default_assets_dir
+    from .loras import LoraLibrary, default_loras_dir
     from .service import ImageService
 
     service = ImageService(engine, idle_unload_seconds=None if args.idle_unload <= 0 else args.idle_unload * 60)
     assets = None if args.no_save else Path(args.assets).expanduser() if args.assets else default_assets_dir()
-    app = create_app(service, default_steps=args.steps, preload=args.preload, assets_dir=assets)
+    library = LoraLibrary(Path(args.loras).expanduser() if args.loras else default_loras_dir())
+    library.folder.mkdir(parents=True, exist_ok=True)
+    app = create_app(service, default_steps=args.steps, preload=args.preload, assets_dir=assets, loras=library)
     host = "0.0.0.0" if args.lan else args.host
     if args.parent_pid:
         watch_parent(args.parent_pid)
@@ -88,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"ButterKnife base URL: {local}v1{' or the network address above with /v1' if lan else ''}", flush=True)
     if assets is not None:
         print(f"Pictures are kept in {assets}", flush=True)
+    print(f"LoRA folder: {library.folder} ({len(library.list())} available)", flush=True)
     uvicorn.run(app, host=host, port=args.port, log_level="info")
     return 0
 

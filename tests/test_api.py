@@ -105,3 +105,47 @@ def test_prebuilt_sources_are_ordered_and_only_for_known_bit_widths():
     assert prebuilt_sources("z-image-turbo", None) == []
     assert prebuilt_sources("z-image", 8) == []
     assert prebuilt_sources("z-image-turbo", 7) == []
+
+
+def test_loras_are_listed_resolved_and_passed_to_the_engine(tmp_path):
+    from crayoncloud.loras import LoraLibrary
+
+    folder = tmp_path / "loras"
+    folder.mkdir()
+    (folder / "Watercolor.safetensors").write_bytes(b"\0" * 10)
+    (folder / "notes.txt").write_text("not a lora")
+    (folder / "sketch.safetensors").write_bytes(b"\0" * 20)
+    library = LoraLibrary(folder)
+    assert [l.name for l in library.list()] == ["Watercolor", "sketch"]
+    assert library.resolve("watercolor") == folder / "Watercolor.safetensors"
+    assert library.resolve("sketch.safetensors") == folder / "sketch.safetensors"
+    for bad in ("../sketch", "nope", "", "/etc/passwd"):
+        with pytest.raises(KeyError):
+            library.resolve(bad)
+
+    engine = FakeEngine()
+    app = create_app(ImageService(engine, idle_unload_seconds=None), assets_dir=None, loras=library)
+    with TestClient(app) as client:
+        listing = client.get("/v1/loras").json()
+        assert [l["name"] for l in listing["data"]] == ["Watercolor", "sketch"] and listing["folder"] == str(folder)
+        assert 'name="lora"' in client.get("/").text
+
+        ok = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256", "loras": [{"name": "watercolor", "scale": 0.7}]})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["crayoncloud"]["loras"] == [{"name": "Watercolor", "scale": 0.7}]
+        assert engine.calls[-1].loras == ((str(folder / "Watercolor.safetensors"), 0.7),)
+        assert client.get("/health").json()["loras"] == ["Watercolor x0.7"]
+
+        missing = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256", "loras": [{"name": "oil"}]})
+        assert missing.status_code == 404 and "oil" in missing.json()["detail"]
+
+        plain = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256"}).json()
+        assert plain["crayoncloud"]["loras"] == []
+
+
+def test_page_says_where_to_put_loras_when_the_folder_is_empty(tmp_path):
+    from crayoncloud.loras import LoraLibrary
+
+    app = create_app(ImageService(FakeEngine(), idle_unload_seconds=None), loras=LoraLibrary(tmp_path / "empty"))
+    with TestClient(app) as client:
+        assert "No styles yet" in client.get("/").text

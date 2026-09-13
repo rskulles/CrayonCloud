@@ -8,3 +8,5 @@ dist/
 crayoncloud-*.png
 dist/
 .DS_Store
+*.safetensors
+loras/

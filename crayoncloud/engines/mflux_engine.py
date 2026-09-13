@@ -53,6 +53,9 @@ class MfluxEngine:
         self.cache_dir = cache_dir or Path(os.environ.get("CRAYONCLOUD_CACHE", Path.home() / ".cache" / "crayoncloud"))
         self._model = None
         self.source: str | None = None
+        # The adapters the loaded model carries; a request asking for a different set triggers a reload.
+        self.loras: tuple[tuple[str, float], ...] = ()
+        self.bake_lora = True
 
     @property
     def loaded(self) -> bool:
@@ -63,7 +66,10 @@ class MfluxEngine:
         """Where the quantised weights are kept between runs; None when running unquantised."""
         return None if self.quantize is None else self.cache_dir / f"{self.model}-q{self.quantize}"
 
-    def load(self) -> None:
+    def load(self, loras: tuple[tuple[str, float], ...] | None = None) -> None:
+        if loras is not None and loras != self.loras:
+            self.unload()
+            self.loras = loras
         if self._model is not None:
             return
         # Imported here so the server starts (and the fake engine works) without MLX installed.
@@ -73,19 +79,24 @@ class MfluxEngine:
         config_name, _ = MODELS[self.model]
         model_config = getattr(ModelConfig, config_name)()
         started = time.monotonic()
+        lora_kwargs = {}
+        if self.loras:
+            # mflux applies adapters on quantised layers too (dequantising for the merge when baking).
+            lora_kwargs = dict(lora_paths=[p for p, _ in self.loras], lora_scales=[s for _, s in self.loras], bake_lora=self.bake_lora)
+            log.info("with LoRAs: %s", ", ".join(f"{Path(p).stem} x{s:g}" for p, s in self.loras))
         cached = self.quantized_path
         if cached is not None and (cached / "transformer").exists():
             # A copy this machine quantised itself (or a prebuilt one already fetched): loads in seconds.
             log.info("loading %s from the quantised copy at %s", self.model, cached)
-            self._model = ZImage(model_config=model_config, model_path=str(cached))
+            self._model = ZImage(model_config=model_config, model_path=str(cached), **lora_kwargs)
             self.source = str(cached)
         elif (snapshot := self._fetch_prebuilt()) is not None:
-            self._model = ZImage(model_config=model_config, model_path=snapshot)
+            self._model = ZImage(model_config=model_config, model_path=snapshot, **lora_kwargs)
         else:
             log.info("loading %s (quantize=%s); this downloads the full-precision weights from Hugging Face", self.model, self.quantize)
-            self._model = ZImage(model_config=model_config, quantize=self.quantize)
+            self._model = ZImage(model_config=model_config, quantize=self.quantize, **lora_kwargs)
             self.source = "Tongyi-MAI (quantised here)"
-            if cached is not None:
+            if cached is not None and not self.loras:
                 self._save_quantized(cached)
         log.info("loaded %s in %.0f s", self.model, time.monotonic() - started)
 
@@ -120,7 +131,7 @@ class MfluxEngine:
             log.warning("could not save the quantised weights to %s: %s", path, exc)
 
     def generate(self, request: GenerationRequest) -> Image.Image:
-        self.load()
+        self.load(request.loras)
         result = self._model.generate_image(
             seed=request.seed,
             prompt=request.prompt,

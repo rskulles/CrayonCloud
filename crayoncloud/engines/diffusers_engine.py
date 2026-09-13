@@ -48,6 +48,8 @@ class DiffusersEngine:
 
     def generate(self, request: GenerationRequest) -> Image.Image:
         self.load()
+        if request.loras:
+            raise RuntimeError("LoRAs are supported by the mflux engine only, for now.")
         import torch
 
         generator = torch.Generator(device="cpu").manual_seed(request.seed)
