@@ -11,8 +11,11 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from html import escape
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -117,28 +120,42 @@ def create_app(service: ImageService, default_steps: int = 8, preload: bool = Fa
             }
         )
 
+    static = Path(__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static)), name="static")
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         status = service.status()
-        return f"""<!doctype html><html><head><meta charset="utf-8"><title>Crayon Cloud</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>body{{font:15px system-ui,sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#222}}
-textarea,input{{width:100%;box-sizing:border-box;font:inherit;padding:.4rem}} button{{font:inherit;padding:.5rem 1rem}}
-img{{max-width:100%;margin-top:1rem;border-radius:.5rem}} .row{{display:flex;gap:.5rem;margin:.5rem 0}} .row>*{{flex:1}} code{{background:#eee;padding:.1rem .3rem}}</style></head>
-<body><h1>Crayon Cloud</h1>
-<p>Serving <b>{escape(status.model)}</b> with the {escape(status.engine)} engine, version {__version__}.
-Point ButterKnife (or anything that speaks the OpenAI images API) at <code>{{origin}}/v1</code>.</p>
-<form id="f"><textarea name="prompt" rows="3" required placeholder="A butter knife spreading a sunrise over toast"></textarea>
-<div class="row"><input name="size" value="1024x1024"><input name="steps" value="{status and 8}" placeholder="steps"><input name="seed" placeholder="seed (random)"></div>
-<button>Generate</button> <span id="s"></span></form>
-<img id="out" alt="">
+        return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Crayon Cloud</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="/static/pico.classless.min.css">
+<style>figure img{{border-radius:var(--pico-border-radius)}} progress{{margin-top:1rem}} .status{{margin-left:.75rem}}</style></head>
+<body><main>
+<header><hgroup><h1>Crayon Cloud</h1>
+<p>Serving <strong>{escape(status.model)}</strong> with the {escape(status.engine)} engine, version {__version__}.</p></hgroup></header>
+<p>Point ButterKnife, or anything that speaks the OpenAI images API, at <code id="base">/v1</code>.</p>
+<form id="f">
+  <label>Prompt<textarea name="prompt" rows="3" required placeholder="A butter knife spreading a sunrise over toast"></textarea></label>
+  <fieldset role="group" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
+    <label>Size<input name="size" value="1024x1024" placeholder="1024x1024"></label>
+    <label>Steps<input name="steps" type="number" min="1" max="100" value="{default_steps}"></label>
+    <label>Seed<input name="seed" type="number" min="0" placeholder="random"></label>
+  </fieldset>
+  <button type="submit">Generate</button><small class="status" id="s"></small>
+  <progress id="p" hidden></progress>
+</form>
+<figure id="fig" hidden><img id="out" alt="Generated image"><figcaption id="cap"></figcaption></figure>
+<footer><small>Requests queue and render one at a time. The model loads on the first picture and unloads after a while of quiet.</small></footer>
+</main>
 <script>
-document.querySelector('code').textContent = location.origin + '/v1';
-const f=document.getElementById('f'), s=document.getElementById('s'), out=document.getElementById('out');
-f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed?+d.seed:undefined}};
-s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
+document.getElementById('base').textContent = location.origin + '/v1';
+const f=document.getElementById('f'), s=document.getElementById('s'), p=document.getElementById('p'), out=document.getElementById('out'), fig=document.getElementById('fig'), cap=document.getElementById('cap');
+f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed!==''?+d.seed:undefined}};
+f.querySelector('button').disabled=true; p.hidden=false; s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
 try{{const r=await fetch('/v1/images/generations',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}); const j=await r.json(); clearInterval(tick);
-if(!r.ok){{const d=j.detail; s.textContent=typeof d==='string'?d:Array.isArray(d)?d.map(x=>x.msg||JSON.stringify(x)).join('; '):(d?JSON.stringify(d):'failed ('+r.status+')');return;}} out.src='data:image/png;base64,'+j.data[0].b64_json; s.textContent=j.crayoncloud.seconds+' s, seed '+j.data[0].seed;}}catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} }};
+if(!r.ok){{const x=j.detail; s.textContent=typeof x==='string'?x:Array.isArray(x)?x.map(y=>y.msg||JSON.stringify(y)).join('; '):(x?JSON.stringify(x):'failed ('+r.status+')');return;}}
+out.src='data:image/png;base64,'+j.data[0].b64_json; fig.hidden=false; cap.textContent=d.prompt+' — '+j.crayoncloud.width+'×'+j.crayoncloud.height+', '+j.crayoncloud.steps+' steps, seed '+j.data[0].seed+', '+j.crayoncloud.seconds+' s'; s.textContent='';}}
+catch(err){{clearInterval(tick); s.textContent=err.message||String(err);}} finally{{p.hidden=true; f.querySelector('button').disabled=false;}} }};
 </script></body></html>"""
 
     return app

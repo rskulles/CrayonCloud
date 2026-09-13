@@ -60,7 +60,9 @@ def test_models_and_status(client):
     assert status["ok"] and status["engine"] == "fake" and status["busy"] is False
     client.post("/v1/images/generations", json={"prompt": "warm up"})
     assert client.get("/v1/status").json()["generated"] == 1
-    assert "Crayon Cloud" in client.get("/").text
+    page = client.get("/").text
+    assert "Crayon Cloud" in page and "pico.classless.min.css" in page
+    assert client.get("/static/pico.classless.min.css").status_code == 200
 
 
 @pytest.mark.parametrize("size,expected", [("1024x1024", (1024, 1024)), ("1000x700", (992, 704)), ("768×1280", (768, 1280))])

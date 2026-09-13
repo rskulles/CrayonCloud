@@ -28,5 +28,8 @@ crayoncloud = "crayoncloud.cli:main"
 [tool.setuptools.packages.find]
 include = ["crayoncloud*"]
 
+[tool.setuptools.package-data]
+crayoncloud = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

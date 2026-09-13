@@ -118,6 +118,7 @@ crayoncloud serve --engine fake  # the API without a model, for development
 Crayon Cloud is **source-available, not open source**, under the
 [PolyForm Noncommercial License 1.0.0](LICENSE.md), the same terms as ButterKnife. Noncommercial use is free; commercial
 use needs written permission. The model weights and the libraries it runs on keep their own licences: Z-Image-Turbo is
-Apache 2.0, mflux is MIT, diffusers is Apache 2.0.
+Apache 2.0, mflux is MIT, diffusers is Apache 2.0, and the try-it page uses [Pico CSS](https://picocss.com) 2.1.1 (MIT,
+copyright 2019-2025 Pico CSS), shipped inside the package.
 
 Copyright Roy S.
