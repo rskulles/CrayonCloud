@@ -69,12 +69,13 @@ If you'd rather not think about terminals, build the menu bar app once and keep 
 cloud in the menu bar with the server's state, and has *Open*, *Copy address for ButterKnife*, *Open Assets Folder*
 (where every rendered picture is kept), a switch for reaching it from the network, the log, and *Quit*.
 
-You need the Xcode Command Line Tools (`xcode-select --install`) and a Python 3.10 to 3.13 that the app can find:
-Homebrew's (`brew install python@3.12`), python.org's, or MacPorts'.
+Building it needs the Xcode Command Line Tools (`xcode-select --install`) and an internet connection; the Mac it runs
+on needs nothing at all, because the app carries its own Python (a relocatable CPython 3.12 from
+[python-build-standalone](https://github.com/astral-sh/python-build-standalone), about 70 MB).
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.1.0 dist
+tools/make-macos-app.sh 0.1.3 dist
 open dist              # drag "Crayon Cloud.app" to Applications
 ```
 
@@ -82,9 +83,15 @@ Add `--dmg` at the end to get a disk image as well. The app is signed only for t
 would refuse a copy sent to another Mac, so build it there too.
 
 The first launch sets things up: it creates a Python environment under `~/Library/Application Support/CrayonCloud`
-and installs the package into it (a few minutes, shown as "Setting up…" in the menu). The model itself downloads on
-the first picture, as with the command line. The server runs on port 8765 as long as the app is open; quitting the
-app stops it. Everything it prints goes to `~/Library/Logs/CrayonCloud/server.log` (*Show log* in the menu).
+with the bundled interpreter and installs the package into it (a few minutes, shown as "Setting up…" in the menu). The
+model itself downloads on the first picture, as with the command line. The server runs on port 8765 as long as the app
+is open; quitting the app stops it. Everything it prints goes to `~/Library/Logs/CrayonCloud/server.log` (*Show log*
+in the menu).
+
+**On the network from the start.** The app listens on every interface by default, since ButterKnife is usually on
+another machine: the menu shows the address other devices use (*On your network: http://…:8765/v1*), and *Copy
+network address for ButterKnife* puts exactly that on the clipboard. Switch off *Reachable on the local network* to
+keep it to this Mac. macOS asks once for local-network permission the first time.
 
 Rebuilding the app with a new version number makes it reinstall the package on the next launch. To uninstall, delete
 the app, `~/Library/Application Support/CrayonCloud` and, if you want the model gone too, `~/.cache/crayoncloud` and

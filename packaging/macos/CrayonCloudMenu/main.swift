@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lanItem: NSMenuItem!
     private var assetsItem: NSMenuItem!
     private var assetsUrl: URL?
+    private var addressLine: NSMenuItem!
     private var server: Process?
     private var localUrl = URL(string: "http://127.0.0.1:8765/")!
     private var lanUrl: URL?
@@ -33,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Crayon Cloud exists to serve ButterKnife, which is often on another machine: reachable on the network by default.
+        UserDefaults.standard.register(defaults: ["lan": true])
         buildMenu()
         openLog()
         installSignalHandlers()
@@ -77,6 +80,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         copyItem = NSMenuItem(title: "Copy address for ButterKnife", action: #selector(copyAddress), keyEquivalent: "c")
         copyItem.target = self
         copyItem.isEnabled = false
+        addressLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        addressLine.isEnabled = false
+        addressLine.isHidden = true
         assetsItem = NSMenuItem(title: "Open Assets Folder", action: #selector(openAssets), keyEquivalent: "a")
         assetsItem.target = self
         assetsItem.isEnabled = false
@@ -88,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(title: "Quit Crayon Cloud", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(statusLine)
+        menu.addItem(addressLine)
         menu.addItem(.separator())
         menu.addItem(openItem)
         menu.addItem(copyItem)
@@ -107,8 +114,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Environment (first run)
 
-    /// A Python 3.10–3.13 on this machine: Homebrew, python.org, MacPorts or the system one, in that order.
+    /// The interpreter shipped inside the bundle (python-build-standalone, put there by tools/make-macos-app.sh).
+    private var bundledPython: URL? {
+        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/python/bin/python3")
+        return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
+    }
+
+    /// The bundled Python, else a 3.10–3.13 on this machine: Homebrew, python.org, MacPorts or the system one.
     private func findPython() -> URL? {
+        if let bundled = bundledPython { return bundled }
         var candidates: [String] = []
         for minor in [12, 13, 11, 10] {
             candidates += ["/opt/homebrew/bin/python3.\(minor)", "/usr/local/bin/python3.\(minor)",
@@ -128,7 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let marker = venv.appendingPathComponent(".crayoncloud-version")
         let installed = (try? String(contentsOf: marker, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
         let command = venv.appendingPathComponent("bin/crayoncloud")
-        if installed == version && FileManager.default.isExecutableFile(atPath: command.path) { return }
+        let venvPython = venv.appendingPathComponent("bin/python").path
+        // A venv points at the interpreter that made it. If that Python is gone (the app moved, or a machine Python
+        // was removed after the bundled one arrived), the environment is dead and is rebuilt from scratch.
+        let healthy = FileManager.default.isExecutableFile(atPath: venvPython) && ((try? run(venvPython, ["-c", "import sys"])) != nil) && ((try? runStatus(venvPython, ["-c", "import sys"])) == 0)
+        if installed == version && healthy && FileManager.default.isExecutableFile(atPath: command.path) { return }
+        if FileManager.default.fileExists(atPath: venvPython) && !healthy {
+            writeLog("=== the environment's Python is gone; rebuilding\n")
+            try? FileManager.default.removeItem(at: venv)
+        }
 
         guard let source = Bundle.main.url(forResource: "crayoncloud-src", withExtension: nil) else {
             throw NSError(domain: "CrayonCloud", code: 1, userInfo: [NSLocalizedDescriptionKey: "The app bundle has no crayoncloud-src folder; rebuild it with tools/make-macos-app.sh."])
@@ -139,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         DispatchQueue.main.async { self.setStatus(installed == nil ? "Setting up (first run, a few minutes)…" : "Updating to \(self.version)…") }
-        writeLog("=== Crayon Cloud \(version): setting up \(venv.path) with \(python.path)\n")
+        writeLog("=== Crayon Cloud \(version): setting up \(venv.path) with \(python.path)\(bundledPython == nil ? "" : " (bundled)")\n")
         if !FileManager.default.fileExists(atPath: venv.appendingPathComponent("bin/python").path) {
             try runLogged(python.path, ["-m", "venv", venv.path])
         }
@@ -148,6 +170,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try runLogged(pip, ["-m", "pip", "install", "--upgrade", "\(source.path)[mlx]"])
         try version.write(to: marker, atomically: true, encoding: .utf8)
         writeLog("=== ready\n")
+    }
+
+    private func runStatus(_ path: String, _ arguments: [String]) throws -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 
     private func run(_ path: String, _ arguments: [String]) throws -> String {
@@ -231,6 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             setStatus("Starting server…")
             openItem.isEnabled = false
             copyItem.isEnabled = false
+            addressLine.isHidden = true
             lanUrl = nil
             try process.run()
             server = process
@@ -261,6 +295,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         openItem.isEnabled = true
         copyItem.isEnabled = true
+        if let lan = lanUrl {
+            addressLine.title = "On your network: \(lan.absoluteString)v1"
+            copyItem.title = "Copy network address for ButterKnife"
+        } else {
+            addressLine.title = "This Mac only: \(localUrl.absoluteString)v1"
+            copyItem.title = "Copy address for ButterKnife"
+        }
+        addressLine.isHidden = false
         setStatus("Running")
     }
 
