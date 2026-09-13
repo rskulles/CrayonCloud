@@ -173,7 +173,7 @@ header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;heig
 <body><main>
 <header><img src="/static/icon.svg" alt=""><hgroup><h1>Crayon Cloud</h1>
 <p>Serving <strong>{escape(status.model)}</strong> with the {escape(status.engine)} engine, version {__version__}.</p></hgroup></header>
-<p>Point ButterKnife, or anything that speaks the OpenAI images API, at <code id="base">/v1</code>.</p>
+<p>Point <a href="https://github.com/rskulles/ButterKnife">ButterKnife</a>, or anything that speaks the OpenAI images API, at <code id="base">/v1</code>.</p>
 <form id="f">
   <label>Prompt<textarea name="prompt" rows="3" required placeholder="A butter knife spreading a sunrise over toast"></textarea></label>
   <fieldset role="group" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
