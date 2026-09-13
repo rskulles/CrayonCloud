@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--preload", action="store_true", help="load the model at start instead of on the first request")
     serve.add_argument("--idle-unload", type=float, default=30.0, metavar="MINUTES", help="unload the model after this many idle minutes; 0 keeps it loaded")
+    serve.add_argument("--parent-pid", type=int, help="stop when this process is gone (the macOS menu bar helper passes its own pid)")
 
     gen = sub.add_parser("generate", help="make one image from the command line")
     engine_args(gen)
@@ -71,9 +72,48 @@ def main(argv: list[str] | None = None) -> int:
     service = ImageService(engine, idle_unload_seconds=None if args.idle_unload <= 0 else args.idle_unload * 60)
     app = create_app(service, default_steps=args.steps, preload=args.preload)
     host = "0.0.0.0" if args.lan else args.host
-    print(f"Crayon Cloud {__version__}: {engine.model} via {engine.name} at http://{host}:{args.port}/ (ButterKnife base URL: http://{'<this machine>' if host == '0.0.0.0' else host}:{args.port}/v1)", flush=True)
+    if args.parent_pid:
+        watch_parent(args.parent_pid)
+
+    # The menu bar helper parses this line for the Open and Copy-address items; keep its shape.
+    local = f"http://{'127.0.0.1' if host == '0.0.0.0' else host}:{args.port}/"
+    lan = f" (on your network: http://{lan_address()}:{args.port}/)" if host == "0.0.0.0" and lan_address() else ""
+    print(f"Crayon Cloud {__version__} ({engine.model} via {engine.name}) is running at {local}{lan}", flush=True)
+    print(f"ButterKnife base URL: {local}v1{' or the network address above with /v1' if lan else ''}", flush=True)
     uvicorn.run(app, host=host, port=args.port, log_level="info")
     return 0
+
+
+def lan_address() -> str | None:
+    """The address other devices reach this machine at: the interface a packet to the LAN would leave from."""
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("10.255.255.255", 1))
+            address = probe.getsockname()[0]
+            return None if address.startswith("127.") else address
+    except OSError:
+        return None
+
+
+def watch_parent(pid: int) -> None:
+    """Stops the server when the process that launched it is gone, so a crashed helper cannot leave an orphan."""
+    import os
+    import signal
+    import threading
+
+    def loop() -> None:
+        while True:
+            time.sleep(2)
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                logging.getLogger("crayoncloud").info("parent process %d is gone; stopping", pid)
+                os.kill(os.getpid(), signal.SIGTERM)
+                return
+
+    threading.Thread(target=loop, name="crayoncloud-parent-watch", daemon=True).start()
 
 
 if __name__ == "__main__":

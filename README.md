@@ -53,12 +53,40 @@ In ButterKnife, add a connection of kind *Image generation* with the base URL `h
 | `--steps` | 8 | Diffusion steps when a request does not say; Turbo is tuned for 8 or 9 |
 | `--preload` | off | Load the model at start instead of on the first request |
 | `--idle-unload` | 30 | Minutes of quiet before the model is unloaded; 0 keeps it loaded |
+| `--parent-pid` | | Stop when that process is gone (the menu bar app passes its own pid) |
 
 There is also a one-off mode for the command line:
 
 ```bash
 crayoncloud generate "a butter knife spreading a sunrise over toast" --size 1280x768 --seed 7
 ```
+
+## Menu bar app for a Mac
+
+If you'd rather not think about terminals, build the menu bar app once and keep it in Applications. It shows a small
+cloud in the menu bar with the server's state, and has *Open*, *Copy address for ButterKnife*, a switch for reaching
+it from the network, the log, and *Quit*.
+
+You need the Xcode Command Line Tools (`xcode-select --install`) and a Python 3.10 to 3.13 that the app can find:
+Homebrew's (`brew install python@3.12`), python.org's, or MacPorts'.
+
+```bash
+git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
+tools/make-macos-app.sh 0.1.0 dist
+open dist              # drag "Crayon Cloud.app" to Applications
+```
+
+Add `--dmg` at the end to get a disk image as well. The app is signed only for the machine that built it; Gatekeeper
+would refuse a copy sent to another Mac, so build it there too.
+
+The first launch sets things up: it creates a Python environment under `~/Library/Application Support/CrayonCloud`
+and installs the package into it (a few minutes, shown as "Setting up…" in the menu). The model itself downloads on
+the first picture, as with the command line. The server runs on port 8765 as long as the app is open; quitting the
+app stops it. Everything it prints goes to `~/Library/Logs/CrayonCloud/server.log` (*Show log* in the menu).
+
+Rebuilding the app with a new version number makes it reinstall the package on the next launch. To uninstall, delete
+the app, `~/Library/Application Support/CrayonCloud` and, if you want the model gone too, `~/.cache/crayoncloud` and
+the Z-Image folders under `~/.cache/huggingface/hub`.
 
 ## The API
 
