@@ -12,14 +12,14 @@ and answers the same request shape as the OpenAI images API, so [ButterKnife](ht
 
 - **Made for ButterKnife.** Add it as an image connection and type `/image a cat in a spacesuit` in any chat.
 - **One command.** No ComfyUI graphs, no web UI to click through. Start it and forget it.
-- **Fast on a Mac.** Apple Silicon runs the model through MLX; a 1024 px image takes a handful of seconds on an M-series
-  chip with the default 8-bit weights.
-- **Kind to your memory.** The model loads on the first request and unloads itself after half an hour of quiet, so the
-  rest of the machine gets the memory back.
+- **Runs on a Mac.** Apple Silicon runs the model through MLX with 8-bit weights. On an M4 Pro a 1024 × 1024 image
+  takes about a minute and a half at 8 steps; 1024 × 768 about a minute.
+- **Kind to your memory.** The model loads on the first request (one second, once the quantised copy is cached) and
+  unloads itself after half an hour of quiet, so the rest of the machine gets the memory back.
 
 ## Get it running
 
-You need Python 3.10 to 3.13 and about 20 GB of disk for the model on first run.
+You need Python 3.10 to 3.13 and about 30 GB of disk for the model (20 GB downloaded, 10 GB quantised).
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
@@ -29,7 +29,9 @@ crayoncloud serve
 ```
 
 That starts it at <http://127.0.0.1:8765/>. Open that page to try a prompt by hand. The first request downloads
-Z-Image-Turbo from Hugging Face and loads it; every request after that is just the render.
+Z-Image-Turbo from Hugging Face (about 20 GB, a few minutes on a fast line), quantises it and saves the quantised
+copy (10 GB) under `~/.cache/crayoncloud`; from then on the model loads in about a second. Set `CRAYONCLOUD_CACHE`
+to keep that copy somewhere else.
 
 To let other machines use it, including a ButterKnife running elsewhere on your Wi‑Fi:
 

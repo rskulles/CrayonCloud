@@ -45,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
 
     quantize = None if args.quantize == 16 else args.quantize
     engine = pick_engine(args.engine, args.model, quantize)
+    if getattr(engine, "quantized_path", None) is not None:
+        log = logging.getLogger("crayoncloud")
+        log.info("quantised weights cache: %s (set CRAYONCLOUD_CACHE to move it)", engine.quantized_path)
 
     if args.command == "generate":
         import random
