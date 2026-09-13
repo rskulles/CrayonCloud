@@ -11,15 +11,45 @@ and answers the same request shape as the OpenAI images API, so [ButterKnife](ht
 ## Why
 
 - **Made for ButterKnife.** Add it as an image connection and type `/image a cat in a spacesuit` in any chat.
-- **One command.** No ComfyUI graphs, no web UI to click through. Start it and forget it.
-- **Runs on a Mac.** Apple Silicon runs the model through MLX with 8-bit weights. On an M4 Pro a 1024 × 1024 image
-  takes about a minute and a half at 8 steps; 1024 × 768 about a minute.
+- **Nothing to fiddle with.** No ComfyUI graphs, no web UI to click through. On a Mac it's a menu bar app that
+  carries its own Python; elsewhere it's one command. Start it and forget it.
+- **At home on a Mac.** Apple Silicon runs the model through MLX with 8-bit weights. On an M4 Pro a 1024 × 1024
+  image takes about a minute and a half at 8 steps, 1024 × 768 about a minute, 512 × 512 twenty seconds. Linux or
+  Windows with an NVIDIA card works through PyTorch.
+- **Keeps what it makes.** Every picture lands in `~/Pictures/Crayon Cloud` with the prompt, seed and settings
+  written into the file, so you can always tell how a picture was made.
 - **Kind to your memory.** The model loads on the first request (one second, once the quantised copy is cached) and
   unloads itself after half an hour of quiet, so the rest of the machine gets the memory back.
 
 ## Get it running
 
-You need Python 3.10 to 3.13 and about 30 GB of disk for the model (20 GB downloaded, 10 GB quantised).
+Two ways: the menu bar app on a Mac (nothing to install first), or `pip` anywhere. Either way the model needs about
+30 GB of disk (20 GB downloaded, 10 GB quantised) and arrives on the first picture.
+
+### The menu bar app (macOS)
+
+Download the disk image from the [Releases page](https://github.com/rskulles/CrayonCloud/releases), drag Crayon Cloud
+to Applications and open it. A small cloud appears in the menu bar with the server's state, and the menu has *Open*,
+*Copy network address for ButterKnife*, *Open Assets Folder*, a switch for reaching it from the network, the log and
+*Quit*.
+
+The first launch sets things up: the app creates a Python environment under `~/Library/Application Support/CrayonCloud`
+with the interpreter it carries and installs the package into it (a few minutes, shown as "Setting up…" in the menu).
+The server runs on port 8765 as long as the app is open; quitting the app stops it. Everything it prints goes to
+`~/Library/Logs/CrayonCloud/server.log` (*Show log* in the menu).
+
+**On the network from the start.** The app listens on every interface by default, since ButterKnife is usually on
+another machine: the menu shows the address other devices use (*On your network: http://…:8765/v1*), and *Copy
+network address for ButterKnife* puts exactly that on the clipboard. Switch off *Reachable on the local network* to
+keep it to this Mac. macOS asks once for local-network permission the first time.
+
+To uninstall, delete the app and `~/Library/Application Support/CrayonCloud`; add `~/.cache/crayoncloud` and the
+Z-Image folders under `~/.cache/huggingface/hub` if you want the model gone too. Your pictures stay in
+`~/Pictures/Crayon Cloud`.
+
+### From the command line (any platform)
+
+You need Python 3.10 to 3.13.
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
@@ -31,7 +61,8 @@ crayoncloud serve
 That starts it at <http://127.0.0.1:8765/>. Open that page to try a prompt by hand. The first request downloads
 Z-Image-Turbo from Hugging Face (about 20 GB, a few minutes on a fast line), quantises it and saves the quantised
 copy (10 GB) under `~/.cache/crayoncloud`; from then on the model loads in about a second. Set `CRAYONCLOUD_CACHE`
-to keep that copy somewhere else.
+to keep that copy somewhere else. Pictures are kept in `~/Pictures/Crayon Cloud` unless you say `--assets` or
+`--no-save`.
 
 To let other machines use it, including a ButterKnife running elsewhere on your Wi‑Fi:
 
@@ -63,39 +94,24 @@ There is also a one-off mode for the command line:
 crayoncloud generate "a butter knife spreading a sunrise over toast" --size 1280x768 --seed 7
 ```
 
-## Menu bar app for a Mac
+## Building the Mac app yourself
 
-If you'd rather not think about terminals, build the menu bar app once and keep it in Applications. It shows a small
-cloud in the menu bar with the server's state, and has *Open*, *Copy address for ButterKnife*, *Open Assets Folder*
-(where every rendered picture is kept), a switch for reaching it from the network, the log, and *Quit*.
-
-Building it needs the Xcode Command Line Tools (`xcode-select --install`) and an internet connection; the Mac it runs
-on needs nothing at all, because the app carries its own Python (a relocatable CPython 3.12 from
-[python-build-standalone](https://github.com/astral-sh/python-build-standalone), about 70 MB).
+The Releases page carries a signed and notarized disk image built by GitHub Actions (`.github/workflows/release.yml`).
+To build the app locally instead, you need the Xcode Command Line Tools (`xcode-select --install`) and an internet
+connection the first time: the script downloads a relocatable CPython 3.12 from
+[python-build-standalone](https://github.com/astral-sh/python-build-standalone) (cached under
+`~/.cache/crayoncloud-build`) and puts it inside the bundle, which is why the finished app needs no Python on the
+machine it runs on. The app is about 70 MB.
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.1.3 dist
-open dist              # drag "Crayon Cloud.app" to Applications
+tools/make-macos-app.sh 0.1.3 dist      # the version goes into the bundle
+open dist                               # drag "Crayon Cloud.app" to Applications
 ```
 
-Add `--dmg` at the end to get a disk image as well. The app is signed only for the machine that built it; Gatekeeper
-would refuse a copy sent to another Mac, so build it there too.
-
-The first launch sets things up: it creates a Python environment under `~/Library/Application Support/CrayonCloud`
-with the bundled interpreter and installs the package into it (a few minutes, shown as "Setting up…" in the menu). The
-model itself downloads on the first picture, as with the command line. The server runs on port 8765 as long as the app
-is open; quitting the app stops it. Everything it prints goes to `~/Library/Logs/CrayonCloud/server.log` (*Show log*
-in the menu).
-
-**On the network from the start.** The app listens on every interface by default, since ButterKnife is usually on
-another machine: the menu shows the address other devices use (*On your network: http://…:8765/v1*), and *Copy
-network address for ButterKnife* puts exactly that on the clipboard. Switch off *Reachable on the local network* to
-keep it to this Mac. macOS asks once for local-network permission the first time.
-
-Rebuilding the app with a new version number makes it reinstall the package on the next launch. To uninstall, delete
-the app, `~/Library/Application Support/CrayonCloud` and, if you want the model gone too, `~/.cache/crayoncloud` and
-the Z-Image folders under `~/.cache/huggingface/hub`.
+Add `--dmg` at the end to get a disk image as well. A locally built app is signed only for the machine that built
+it: it runs there, but a copy sent to another Mac is refused by Gatekeeper, which is what the notarized release is
+for. Rebuilding with a new version number makes the app reinstall its package on the next launch.
 
 ## The API
 

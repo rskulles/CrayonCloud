@@ -1,0 +1,113 @@
+# Builds Crayon Cloud.app on a tag, signs it with a Developer ID, notarizes and staples it, and attaches a .dmg to a
+# GitHub release. Signing only happens when the `release` environment holds APPLE_CERTIFICATE_P12 (plus
+# APPLE_CERTIFICATE_PASSWORD, APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER_ID, APPLE_NOTARY_KEY); without them the
+# workflow still produces an ad-hoc-signed .dmg that only runs on the machine that opens it after removing quarantine.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Tests
+        run: |
+          python3 -m venv .venv && . .venv/bin/activate
+          pip install -q -e ".[dev]"
+          python -m pytest -q
+
+      - name: Build Crayon Cloud.app
+        run: tools/make-macos-app.sh "${GITHUB_REF_NAME#v}" out
+
+      - name: Import Developer ID certificate
+        if: env.APPLE_CERTIFICATE_P12 != ''
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+          printf '%s' "$APPLE_CERTIFICATE_P12" | tr -d '\n\r\t ' | base64 --decode > $RUNNER_TEMP/cert.p12 || { echo "::error::APPLE_CERTIFICATE_P12 is not valid base64. Create it with: base64 -i cert.p12 | pbcopy"; exit 1; }
+          openssl pkcs12 -in $RUNNER_TEMP/cert.p12 -passin env:APPLE_CERTIFICATE_PASSWORD -nokeys -noout -legacy 2>/dev/null || openssl pkcs12 -in $RUNNER_TEMP/cert.p12 -passin env:APPLE_CERTIFICATE_PASSWORD -nokeys -noout || { echo "::error::APPLE_CERTIFICATE_P12 does not open with APPLE_CERTIFICATE_PASSWORD. Export 'Developer ID Application' with its private key from Keychain Access as a .p12, then base64 -i cert.p12 | pbcopy"; exit 1; }
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import $RUNNER_TEMP/cert.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN"
+          rm $RUNNER_TEMP/cert.p12
+
+      - name: Sign, notarize and staple
+        if: env.APPLE_CERTIFICATE_P12 != ''
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+        run: |
+          APP="out/Crayon Cloud.app"
+          IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)".*/\1/')
+          # Inside out: every Mach-O in the bundled Python (executables get the entitlements, libraries the hardened
+          # runtime), then the menu bar helper, then the bundle as a whole.
+          find "$APP/Contents/Resources/python" -type f \( -name "*.dylib" -o -name "*.so" -o -perm -u+x \) -print0 | while IFS= read -r -d '' f; do
+            if file -b "$f" | grep -q "Mach-O"; then
+              if file -b "$f" | grep -q "executable"; then
+                codesign --force --options runtime --timestamp --entitlements packaging/macos/entitlements.plist --sign "$IDENTITY" "$f"
+              else
+                codesign --force --options runtime --timestamp --sign "$IDENTITY" "$f"
+              fi
+            fi
+          done
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/MacOS/CrayonCloudMenu"
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "$APPLE_NOTARY_KEY" > $RUNNER_TEMP/notary.p8
+          ditto -c -k --keepParent "$APP" $RUNNER_TEMP/notarize.zip
+          xcrun notarytool submit $RUNNER_TEMP/notarize.zip --key $RUNNER_TEMP/notary.p8 --key-id "$APPLE_NOTARY_KEY_ID" --issuer "$APPLE_NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple "$APP"
+          rm $RUNNER_TEMP/notary.p8
+
+      - name: Disk image
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+        run: |
+          DMG=CrayonCloud-${{ github.ref_name }}-macos-${{ matrix.arch }}.dmg
+          STAGE=$RUNNER_TEMP/dmg && mkdir -p "$STAGE"
+          cp -R "out/Crayon Cloud.app" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "Crayon Cloud" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+          if [ -n "$APPLE_CERTIFICATE_P12" ]; then
+            IDENTITY=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)".*/\1/')
+            codesign --force --timestamp --sign "$IDENTITY" "$DMG"
+            echo "$APPLE_NOTARY_KEY" > $RUNNER_TEMP/notary.p8
+            xcrun notarytool submit "$DMG" --key $RUNNER_TEMP/notary.p8 --key-id "$APPLE_NOTARY_KEY_ID" --issuer "$APPLE_NOTARY_ISSUER_ID" --wait
+            xcrun stapler staple "$DMG"
+            rm $RUNNER_TEMP/notary.p8
+          fi
+          shasum -a 256 "$DMG" > SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: |
+            CrayonCloud-*.dmg
+            SHA256SUMS.txt
+          generate_release_notes: true
