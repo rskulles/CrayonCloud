@@ -211,8 +211,10 @@ header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;heig
 </main>
 <script>
 document.getElementById('base').textContent = location.origin + '/v1';
+const addLora=document.getElementById('add-lora'); if(addLora){{addLora.onclick=()=>{{const rows=document.querySelectorAll('#loras .lora-row'); if(rows.length>=4) return; rows[rows.length-1].after(document.getElementById('lora-template').content.cloneNode(true)); addLora.disabled=document.querySelectorAll('#loras .lora-row').length>=4;}};}}
 const f=document.getElementById('f'), s=document.getElementById('s'), p=document.getElementById('p'), out=document.getElementById('out'), fig=document.getElementById('fig'), cap=document.getElementById('cap');
-f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed!==''?+d.seed:undefined,loras:d.lora?[{{name:d.lora,scale:+d.lora_scale||1}}]:undefined}};
+f.onsubmit=async e=>{{e.preventDefault(); const d=Object.fromEntries(new FormData(f)); const rows=[...f.querySelectorAll('.lora-row')].map(r=>({{name:r.querySelector('select').value,scale:+r.querySelector('input').value||1}})).filter(l=>l.name);
+const body={{prompt:d.prompt,size:d.size,steps:+d.steps||undefined,seed:d.seed!==''?+d.seed:undefined,loras:rows.length?rows:undefined}};
 f.querySelector('button').disabled=true; p.classList.add('on'); s.textContent='rendering…'; const t0=Date.now(); const tick=setInterval(()=>s.textContent='rendering… '+Math.round((Date.now()-t0)/1000)+' s',500);
 try{{const r=await fetch('/v1/images/generations',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}}); const j=await r.json(); clearInterval(tick);
 if(!r.ok){{const x=j.detail; s.textContent=typeof x==='string'?x:Array.isArray(x)?x.map(y=>y.msg||JSON.stringify(y)).join('; '):(x?JSON.stringify(x):'failed ('+r.status+')');return;}}
@@ -229,7 +231,13 @@ def lora_picker(library: LoraLibrary) -> str:
     if not loras:
         return f'<small>No styles yet: drop a Z-Image LoRA (<code>.safetensors</code>) into <code>{escape(str(library.folder))}</code> and reload.</small>'
     options = "".join(f'<option value="{escape(l.name)}">{escape(l.name)}</option>' for l in loras)
-    return f"""<fieldset role="group" style="display:grid;grid-template-columns:2fr 1fr;gap:1rem">
-    <label>Style (LoRA)<select name="lora"><option value="">None</option>{options}</select></label>
-    <label>Strength<input name="lora_scale" type="number" min="-2" max="3" step="0.1" value="1"></label>
+    row = f"""<div class="lora-row" style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:.5rem">
+      <select name="lora"><option value="">None</option>{options}</select>
+      <input name="lora_scale" type="number" min="-2" max="3" step="0.1" value="1" aria-label="strength">
+    </div>"""
+    return f"""<fieldset id="loras">
+    <legend>Styles (LoRAs) and strengths, applied together; up to four</legend>
+    {row}
+    <template id="lora-template">{row}</template>
+    <button type="button" id="add-lora" class="secondary outline" style="width:auto;padding:.3rem .8rem;font-size:.85em">+ Another style</button>
   </fieldset>"""

@@ -128,7 +128,13 @@ def test_loras_are_listed_resolved_and_passed_to_the_engine(tmp_path):
     with TestClient(app) as client:
         listing = client.get("/v1/loras").json()
         assert [l["name"] for l in listing["data"]] == ["Watercolor", "sketch"] and listing["folder"] == str(folder)
-        assert 'name="lora"' in client.get("/").text
+        page = client.get("/").text
+        assert 'name="lora"' in page and 'id="add-lora"' in page and "up to four" in page
+
+        two = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256", "loras": [{"name": "watercolor", "scale": 0.7}, {"name": "sketch", "scale": 0.4}]}).json()
+        assert two["crayoncloud"]["loras"] == [{"name": "Watercolor", "scale": 0.7}, {"name": "sketch", "scale": 0.4}]
+        assert engine.calls[-1].loras == ((str(folder / "Watercolor.safetensors"), 0.7), (str(folder / "sketch.safetensors"), 0.4))
+        assert client.get("/health").json()["loras"] == ["Watercolor x0.7", "sketch x0.4"]
 
         ok = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256", "loras": [{"name": "watercolor", "scale": 0.7}]})
         assert ok.status_code == 200, ok.text

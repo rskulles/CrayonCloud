@@ -113,7 +113,7 @@ machine it runs on. The app is about 70 MB.
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.1.8 dist      # the version goes into the bundle
+tools/make-macos-app.sh 0.1.9 dist      # the version goes into the bundle
 open dist                               # drag "Crayon Cloud.app" to Applications
 ```
 
@@ -125,10 +125,12 @@ for. Rebuilding with a new version number makes the app reinstall its package on
 
 Drop a Z-Image LoRA (a `.safetensors` file) into the LoRA folder, `~/Library/Application Support/CrayonCloud/loras`
 on a Mac (*Open LoRA Folder* in the menu), `~/.config/crayoncloud/loras` elsewhere, or wherever `--loras` points, and
-it appears by its file name: in the try-it page's *Style* dropdown, at `GET /v1/loras`, and in ButterKnife's picture
-style picker. Ask for one with `"loras": [{"name": "watercolor", "scale": 0.8}]` on a request, or `/image a lighthouse
---lora watercolor:0.8` in ButterKnife. Changing the set of styles reloads the model, about five seconds; renders with
-the same styles after that cost nothing extra. Adapters work on the 8-bit weights directly. mflux engine only.
+it appears by its file name: in the try-it page's *Styles* rows, at `GET /v1/loras`, and in ButterKnife's picture
+style picker. Ask for them with `"loras": [{"name": "watercolor", "scale": 0.8}, {"name": "sketch", "scale": 0.4}]`
+on a request (up to four, each with its own strength; they stack, and since each is an additive change to the weights
+the order does not change the result), or `/image a lighthouse --lora watercolor:0.8 --lora sketch:0.4` in ButterKnife.
+Changing the set of styles reloads the model, about five seconds; renders with the same set after that cost nothing
+extra. Adapters work on the 8-bit weights directly. mflux engine only.
 
 ## The API
 
