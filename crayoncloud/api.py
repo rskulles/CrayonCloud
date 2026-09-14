@@ -31,6 +31,8 @@ DEFAULT_SIZE = (1024, 1024)
 # A1111's denoising strength: 0 gives the source picture back, 1 ignores it. 0.6 changes a picture without losing it.
 DEFAULT_STRENGTH = 0.6
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
+# Columns of falling dots in the try-it page's rendering indicator; they spread across the form's width.
+RAIN_COLUMNS = 24
 
 
 class LoraSpec(BaseModel):
@@ -312,10 +314,11 @@ header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;heig
 #i2i{{display:grid;grid-template-columns:2fr 1fr;gap:1rem;align-items:start}} #i2i small{{grid-column:1/-1;margin-top:-.5rem}}
 #src{{max-height:9rem;max-width:100%;border-radius:var(--pico-border-radius);justify-self:end}}
 #reuse{{width:auto;padding:.3rem .8rem;font-size:.85em;margin-top:.5rem}}
-/* The rendering indicator: three columns of dots falling like the rain on the icon. */
-.rain{{display:none;gap:.55rem;height:2.2rem;margin:1rem 0 0 .2rem}} .rain.on{{display:flex}}
+/* The rendering indicator: columns of dots falling like the rain on the icon, spread across the whole width. */
+.rain{{display:none;justify-content:space-between;height:2.2rem;margin:1rem 0 0;padding:0 .4rem}} .rain.on{{display:flex}}
 .rain span{{display:block;width:.55rem;height:.55rem;border-radius:50%;animation:fall 1.2s linear infinite}}
 .rain i{{display:flex;flex-direction:column;gap:.35rem}} .rain i:nth-child(3n+1) span{{background:#ff4b4b}} .rain i:nth-child(3n+2) span{{background:#3ddc6a;animation-delay:.4s}} .rain i:nth-child(3n) span{{background:#4aa8ff;animation-delay:.8s}}
+.rain i:nth-child(4n+2) span{{animation-duration:1.5s}} .rain i:nth-child(5n+3) span{{animation-delay:.2s}} .rain i:nth-child(7n+4) span{{animation-duration:1s;animation-delay:.6s}}
 @keyframes fall{{0%{{opacity:0;transform:translateY(-.6rem)}}30%{{opacity:1}}100%{{opacity:0;transform:translateY(.9rem)}}}}
 </style></head>
 <body><main>
@@ -343,7 +346,7 @@ header{{display:flex;align-items:center;gap:1rem}} header img{{width:4.5rem;heig
   </fieldset>
   {lora_picker(library)}
   <button type="submit">Generate</button><small class="status" id="s"></small>
-  <div class="rain" id="p" aria-hidden="true"><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i><i><span></span><span></span></i></div>
+  <div class="rain" id="p" aria-hidden="true">{"<i><span></span><span></span></i>" * RAIN_COLUMNS}</div>
 </form>
 <figure id="fig" hidden><img id="out" alt="Generated image"><figcaption id="cap"></figcaption><button type="button" id="reuse" class="secondary outline">Use as source</button></figure>
 <footer><small>Requests queue and render one at a time. The model loads on the first picture and unloads after a while of quiet.{(" Pictures are kept in <code>" + escape(str(assets_dir)) + "</code>.") if assets_dir else ""}</small></footer>

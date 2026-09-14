@@ -4,8 +4,8 @@
     {
       "name": "crayoncloud-fake",
       "runtimeExecutable": ".venv/bin/crayoncloud",
-      "runtimeArgs": ["serve", "--engine", "fake", "--port", "8765", "--no-save"],
-      "port": 8765
+      "runtimeArgs": ["serve", "--engine", "fake", "--port", "8766", "--no-save"],
+      "port": 8766
     }
   ]
 }
