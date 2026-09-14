@@ -18,7 +18,7 @@ pytest                               # whole suite (tests/test_api.py), runs in 
 pytest tests/test_api.py -k loras    # one test by name substring
 crayoncloud serve --engine fake      # the API without a model, for development; try-it page at http://127.0.0.1:8765/
 crayoncloud generate "prompt" --size 1024x1024 --seed 7   # one-off render from the CLI
-tools/make-macos-app.sh 0.2.0 dist [--dmg]                 # build "Crayon Cloud.app" locally (needs Xcode CLT)
+tools/make-macos-app.sh 0.2.1 dist [--dmg]                 # build "Crayon Cloud.app" locally (needs Xcode CLT)
 ```
 
 There is no linter or formatter configured. Python is 3.10 to 3.13 (`mflux` pins < 3.14); `.venv` here is 3.12.

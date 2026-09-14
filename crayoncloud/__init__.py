@@ -1,3 +1,3 @@
 """Crayon Cloud: a small image generation server that ButterKnife (and anything speaking the OpenAI images API) can use."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"

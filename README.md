@@ -115,7 +115,7 @@ machine it runs on. The app is about 70 MB.
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.2.0 dist      # the version goes into the bundle
+tools/make-macos-app.sh 0.2.1 dist      # the version goes into the bundle
 open dist                               # drag "Crayon Cloud.app" to Applications
 ```
 
