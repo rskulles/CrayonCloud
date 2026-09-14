@@ -137,19 +137,61 @@ extra. Adapters work on the 8-bit weights directly. mflux engine only.
 ## Image to image
 
 Start from a picture instead of noise: the try-it page has a *Text to image* / *Image to image* switch at the top of
-the form. Pick *Image to image*, choose a picture, set the strength, write what should change, and generate. Every
-result has a *Use as source* button, so you can push a picture through several rounds. Leave *Size* blank and the
-result keeps the picture's shape (scaled into the 256 to 2048 range and rounded to multiples of 16); fill it in to
-reshape. A big photo is shrunk to 2048 on its longest side before anything else happens, so a 24-megapixel
-JPEG costs no more than a screenshot.
+the form. Pick *Image to image*, choose a picture, set the strength, describe the picture you want, and generate.
+Every result has a *Use as source* button, so you can push a picture through several rounds. Leave *Size* blank and
+the result keeps the picture's shape (scaled into the 256 to 2048 range and rounded to multiples of 16); fill it in
+to reshape. A big photo is shrunk to 2048 on its longest side before anything else happens, so a 24-megapixel JPEG
+costs no more than a screenshot.
 
-**Strength** works the way it does in Automatic1111 and ComfyUI (denoising strength): 0 gives the picture back, 1
-ignores it and is plain text to image. Around 0.5 to 0.7 keeps the composition and changes the rest; 0.3 is a touch-up.
-Z-Image-Turbo renders in 8 steps, so the slider has eight distinct positions and anything in between rounds to one
-of them. A lower strength also means fewer steps, so it is faster than a plain render. From the command line:
+### How it works, in plain words
+
+A normal render starts from pure noise and the model paints your prompt out of it over 8 steps. Image to image
+starts from *your picture with some noise poured over it* and skips the first few steps. The model then does what it
+always does: it paints the prompt, but now the rough shapes and colours that survived under the noise steer where
+things end up. That is all it is. The model never sees your original clearly, it does not know what "the same" means,
+and it cannot tell which parts you wanted kept.
+
+**Strength** is how much noise is poured on, and works the way it does in Automatic1111 and ComfyUI: 0 pours none
+and hands the picture straight back, 1 drowns it completely and is plain text to image. Because Z-Image-Turbo takes
+8 steps, the slider really has eight positions (each 0.125 is one step) and anything in between rounds to one of
+them. Lower strength also means fewer steps, so it is faster than a plain render.
+
+| What you want | Strength |
+|---|---|
+| A small touch-up, a little more polish, the same picture slightly cleaner | 0.3 to 0.4 |
+| The same scene in a different style or medium (photo to watercolour, sketch to painting) | 0.5 to 0.65 |
+| The same layout with different lighting, season, weather or time of day | 0.7 to 0.85 |
+| Only the rough arrangement kept; everything else new | 0.9 |
+
+### How to write the prompt
+
+Describe the **finished picture**, not the change. The model is not an editor and does not take instructions.
+
+- Not "make it night" or "the same meadow but at night". Say "a meadow at night under a full moon, dark blue sky,
+  moonlit grass, storybook illustration".
+- **Say what should stay as well as what should change.** Subject, medium, framing, background. If you upload a
+  watercolour of a lighthouse and only write "at sunset", you may get a photograph of a sunset. Write "watercolour
+  of a lighthouse at sunset".
+- **For a style change, put the medium first.** "Charcoal sketch of a woman in a red coat on a rainy street" works far
+  better than tacking "as a sketch" on the end. A style LoRA stacks on top of this.
+- **Match the strength to the size of the change.** Low strength keeps the source's colours and light, so a prompt
+  that contradicts them loses. A night prompt at 0.6 on a sunny picture gives you a sunny picture with a faint moon.
+- **Keep the seed fixed while you move the slider**, so you can see what the strength alone did. Then try a few seeds
+  at the strength that worked.
+- Negative prompts do nothing on Z-Image-Turbo. Put what you want in, not what you want out.
+
+### What it cannot do
+
+The change is always to the **whole picture**. There is no mask and no inpainting, so you cannot say "only the shirt".
+Changing one thing means everything else gets repainted a little too. A person in a blue shirt can become a person in
+a red shirt at around 0.6 to 0.7, but the face will come back as someone who looks a lot like them, not exactly them.
+It works best when the thing you want changed is big in the frame and the thing you want kept is not a face. Crop the
+source to the composition you want before uploading.
+
+From the command line:
 
 ```bash
-crayoncloud generate "the same meadow at night under a full moon" --image docs/sample.png --strength 0.6
+crayoncloud generate "a meadow at night under a full moon, dark blue sky, moonlit grass, storybook illustration" --image docs/sample.png --strength 0.75
 ```
 
 mflux engine only for now; the diffusers engine answers with an error.
