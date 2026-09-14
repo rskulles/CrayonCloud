@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "crayoncloud-fake",
+      "runtimeExecutable": ".venv/bin/crayoncloud",
+      "runtimeArgs": ["serve", "--engine", "fake", "--port", "8765", "--no-save"],
+      "port": 8765
+    }
+  ]
+}
