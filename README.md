@@ -140,7 +140,8 @@ Start from a picture instead of noise: the try-it page has a *Text to image* / *
 the form. Pick *Image to image*, choose a picture, set the strength, write what should change, and generate. Every
 result has a *Use as source* button, so you can push a picture through several rounds. Leave *Size* blank and the
 result keeps the picture's shape (scaled into the 256 to 2048 range and rounded to multiples of 16); fill it in to
-reshape.
+reshape. A big photo is shrunk to 2048 on its longest side before anything else happens, so a 24-megapixel
+JPEG costs no more than a screenshot.
 
 **Strength** works the way it does in Automatic1111 and ComfyUI (denoising strength): 0 gives the picture back, 1
 ignores it and is plain text to image. Around 0.5 to 0.7 keeps the composition and changes the rest; 0.3 is a touch-up.
@@ -179,7 +180,7 @@ client already knows how to call:
 
 | Field | Required | What it is |
 |---|---|---|
-| `image` | yes | The picture file: PNG, JPEG or WebP, up to 32 MB. EXIF orientation is applied. |
+| `image` | yes | The picture file: PNG, JPEG or WebP, up to 32 MB. EXIF orientation is applied; anything longer than 2048 on its longest side is scaled down to that first, since nothing renders larger. |
 | `prompt` | yes | What the result should be |
 | `strength` | no | 0 to 1, default 0.6; see above |
 | `size` | no | `WxH`; leave out to keep the picture's shape |

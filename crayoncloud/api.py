@@ -80,15 +80,29 @@ def fit_size(width: int, height: int) -> tuple[int, int]:
 
 
 def decode_image(data: bytes) -> Image.Image:
-    """A source picture from PNG, JPEG or WebP bytes: EXIF orientation applied, RGB. ValueError when it is not a picture."""
+    """A source picture from PNG, JPEG or WebP bytes: EXIF orientation applied, RGB, no longer than MAX_SIDE on its
+    longest side. ValueError when it is not a picture."""
     if len(data) > MAX_IMAGE_BYTES:
         raise ValueError(f"the picture is larger than {MAX_IMAGE_BYTES // (1024 * 1024)} MB")
     try:
         image = Image.open(io.BytesIO(data))
+        if image.format == "JPEG":
+            # Let libjpeg decode a big photo at 1/2, 1/4 or 1/8 scale (never below MAX_SIDE) instead of in full.
+            image.draft("RGB", (MAX_SIDE, MAX_SIDE))
         image.load()
     except Exception as exc:  # noqa: BLE001 - Pillow raises a zoo of exceptions for bad input; the caller only needs "no"
         raise ValueError(f"not a picture I can read ({exc})") from exc
-    return ImageOps.exif_transpose(image).convert("RGB")
+    return shrink_to_fit(ImageOps.exif_transpose(image).convert("RGB"))
+
+
+def shrink_to_fit(image: Image.Image, limit: int = MAX_SIDE) -> Image.Image:
+    """Scales a picture down so its longest side is at most `limit`, keeping the shape. Nothing renders larger than
+    that, and the engine would only resize it again, so a 30 MB photo is shrunk once here instead of carried around."""
+    longest = max(image.size)
+    if longest <= limit:
+        return image
+    scale = limit / longest
+    return image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))), Image.Resampling.LANCZOS)
 
 
 def decode_base64_image(text: str) -> Image.Image:

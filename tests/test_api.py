@@ -242,3 +242,22 @@ def test_cli_generate_can_start_from_a_picture(tmp_path):
     image = Image.open(out)
     assert image.size == (384, 256) and image.getpixel((150, 100)) == (0, 0, 255)  # short side lifted to 256, shape kept
     assert main(["generate", "x", "--engine", "fake", "--image", str(tmp_path / "missing.png"), "--output", str(out)]) == 2
+
+
+def test_big_source_pictures_are_shrunk_to_the_largest_render(client):
+    from crayoncloud.api import decode_image, shrink_to_fit
+
+    png = png_bytes((5000, 3000), (0, 200, 0))
+    assert decode_image(png).size == (2048, 1229)  # longest side to 2048, shape kept
+    assert shrink_to_fit(Image.new("RGB", (2048, 100))).size == (2048, 100)  # at the limit: untouched
+    assert shrink_to_fit(Image.new("RGB", (300, 4096))).size == (150, 2048)  # portrait too
+
+    jpeg = io.BytesIO()
+    Image.new("RGB", (6000, 4000), (0, 0, 200)).save(jpeg, format="JPEG")
+    decoded = decode_image(jpeg.getvalue())
+    assert decoded.size == (2048, 1365) and decoded.getpixel((1000, 700))[2] > 150  # draft mode decoded it small, then shrunk
+
+    body = client.post("/v1/images/edits", files={"image": ("big.png", png, "image/png")}, data={"prompt": "x", "strength": "0"}).json()
+    assert body["crayoncloud"]["source"] == {"width": 2048, "height": 1229, "strength": 0.0}
+    assert (body["crayoncloud"]["width"], body["crayoncloud"]["height"]) == (2048, 1232)
+    assert client.engine.calls[-1].init_image.size == (2048, 1229)
