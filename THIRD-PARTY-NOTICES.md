@@ -53,6 +53,7 @@ ones current when this file was written.
 | [Starlette](https://github.com/Kludex/starlette) | BSD-3-Clause | The framework under FastAPI |
 | [Uvicorn](https://uvicorn.dev) | BSD-3-Clause | The server |
 | [Pydantic](https://github.com/pydantic/pydantic) | MIT | Request validation |
+| [python-multipart](https://github.com/Kludex/python-multipart) | Apache 2.0 | Reading the multipart form of `/v1/images/edits` (the source picture) |
 | [Pillow](https://python-pillow.github.io) | MIT-CMU (the historical PIL licence) | Encoding PNGs and their metadata |
 | [pytest](https://pytest.org), [HTTPX](https://www.python-httpx.org) | MIT, BSD-3-Clause | Tests only (the `dev` extra) |
 

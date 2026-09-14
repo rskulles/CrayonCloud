@@ -155,3 +155,90 @@ def test_page_says_where_to_put_loras_when_the_folder_is_empty(tmp_path):
     app = create_app(ImageService(FakeEngine(), idle_unload_seconds=None), loras=LoraLibrary(tmp_path / "empty"))
     with TestClient(app) as client:
         assert "No styles yet" in client.get("/").text
+
+
+def png_bytes(size=(512, 384), colour=(255, 0, 0)) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", size, colour).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("source,expected", [((512, 384), (512, 384)), ((320, 240), (336, 256)), ((4000, 2000), (2048, 1024)), ((100, 50), (512, 256)), ((1000, 700), (992, 704)), ((3000, 200), (2048, 256))])
+def test_fit_size_keeps_the_picture_shape_inside_the_limits(source, expected):
+    from crayoncloud.api import fit_size
+
+    assert fit_size(*source) == expected
+
+
+def test_edits_endpoint_starts_from_the_picture(client):
+    response = client.post("/v1/images/edits", files={"image": ("photo.png", png_bytes(), "image/png")}, data={"prompt": "make it night", "strength": "0.4", "seed": "5"})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["crayoncloud"]["width"], body["crayoncloud"]["height"]) == (512, 384)  # the picture's own shape
+    assert body["crayoncloud"]["source"] == {"width": 512, "height": 384, "strength": 0.4}
+    request = client.engine.calls[-1]
+    assert request.init_image.size == (512, 384) and request.strength == 0.4 and request.prompt == "make it night"
+    saved = Image.open(body["data"][0]["file"])
+    assert saved.text["source"] == "512x384" and saved.text["strength"] == "0.4" and saved.text["prompt"] == "make it night"
+
+    # Strength 0 hands the source back: the fake engine blends nothing of its own in.
+    body = client.post("/v1/images/edits", files={"image": ("photo.png", png_bytes(), "image/png")}, data={"prompt": "x", "strength": "0"}).json()
+    image = Image.open(io.BytesIO(base64.b64decode(body["data"][0]["b64_json"])))
+    assert image.getpixel((160, 120)) == (255, 0, 0)
+
+    # An explicit size wins over the picture's shape, and the other fields still work.
+    body = client.post("/v1/images/edits", files={"image": ("photo.jpg", png_bytes(), "image/jpeg")}, data={"prompt": "x", "size": "512x256", "steps": "3", "n": "2", "seed": "10"}).json()
+    assert (body["crayoncloud"]["width"], body["crayoncloud"]["height"]) == (512, 256)
+    assert [d["seed"] for d in body["data"]] == [10, 11] and body["crayoncloud"]["steps"] == 3
+    assert body["crayoncloud"]["source"]["strength"] == 0.6  # the default
+
+
+def test_json_generations_accepts_a_base64_picture(client):
+    encoded = base64.b64encode(png_bytes((100, 50))).decode("ascii")
+
+    body = client.post("/v1/images/generations", json={"prompt": "x", "image": encoded, "strength": 0.9}).json()
+    assert (body["crayoncloud"]["width"], body["crayoncloud"]["height"]) == (512, 256)  # too small: scaled up, shape kept
+    assert body["crayoncloud"]["source"] == {"width": 100, "height": 50, "strength": 0.9}
+    assert client.engine.calls[-1].init_image.size == (100, 50)
+
+    body = client.post("/v1/images/generations", json={"prompt": "x", "image": "data:image/png;base64," + encoded, "size": "256x256"}).json()
+    assert (body["crayoncloud"]["width"], body["crayoncloud"]["height"]) == (256, 256)
+
+    plain = client.post("/v1/images/generations", json={"prompt": "x", "size": "256x256"}).json()
+    assert plain["crayoncloud"]["source"] is None and client.engine.calls[-1].init_image is None
+    assert client.post("/v1/images/generations", json={"prompt": "x"}).json()["crayoncloud"]["width"] == 1024  # no size, no picture
+
+
+def test_image_to_image_rejects_bad_input(client):
+    files = {"image": ("photo.png", png_bytes(), "image/png")}
+    assert client.post("/v1/images/edits", files={"image": ("notes.txt", b"not a picture", "text/plain")}, data={"prompt": "x"}).status_code == 400
+    assert client.post("/v1/images/edits", files=files, data={"prompt": "x", "strength": "1.5"}).status_code == 422
+    assert client.post("/v1/images/edits", files=files, data={"prompt": ""}).status_code == 422
+    assert client.post("/v1/images/edits", files=files, data={"prompt": "x", "size": "huge"}).status_code == 400
+    assert client.post("/v1/images/edits", files=files, data={"prompt": "x", "loras": "not json"}).status_code == 400
+    assert client.post("/v1/images/edits", files=files, data={"prompt": "x", "loras": '[{"name": "nope"}]'}).status_code == 404
+    assert client.post("/v1/images/edits", files=files, data={"prompt": "x", "response_format": "url"}).status_code == 400
+    assert client.post("/v1/images/edits", files={**files, "mask": ("m.png", png_bytes(), "image/png")}, data={"prompt": "x"}).status_code == 400
+    assert client.post("/v1/images/edits", data={"prompt": "x"}).status_code == 422  # no picture at all
+    assert client.post("/v1/images/generations", json={"prompt": "x", "image": "@@not base64@@"}).status_code == 400
+    assert client.post("/v1/images/generations", json={"prompt": "x", "image": base64.b64encode(b"nope").decode()}).status_code == 400
+    assert client.post("/v1/images/generations", json={"prompt": "x", "strength": -0.1}).status_code == 422
+
+
+def test_page_can_switch_between_text_and_image_to_image(client):
+    page = client.get("/").text
+    assert 'name="mode"' in page and 'value="image"' in page and 'name="strength"' in page
+    assert "/v1/images/edits" in page and 'id="reuse"' in page
+
+
+def test_cli_generate_can_start_from_a_picture(tmp_path):
+    from crayoncloud.cli import main
+
+    source = tmp_path / "source.png"
+    source.write_bytes(png_bytes((300, 200), (0, 0, 255)))
+    out = tmp_path / "out.png"
+    assert main(["generate", "a blue thing", "--engine", "fake", "--image", str(source), "--strength", "0", "--seed", "1", "--output", str(out)]) == 0
+    image = Image.open(out)
+    assert image.size == (384, 256) and image.getpixel((150, 100)) == (0, 0, 255)  # short side lifted to 256, shape kept
+    assert main(["generate", "x", "--engine", "fake", "--image", str(tmp_path / "missing.png"), "--output", str(out)]) == 2

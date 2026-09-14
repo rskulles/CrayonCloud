@@ -16,6 +16,10 @@ class GenerationRequest:
     negative_prompt: str | None = None
     # (absolute path, scale) pairs, already resolved by the API from names in the LoRA folder. Order matters.
     loras: tuple[tuple[str, float], ...] = ()
+    # Image to image: a source picture (already oriented and RGB) and how far to move away from it. `strength` is
+    # A1111's denoising strength: 0 gives the source back, 1 ignores it and is plain text to image.
+    init_image: Image.Image | None = None
+    strength: float = 0.6
 
 
 class Engine(Protocol):

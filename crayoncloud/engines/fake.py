@@ -42,6 +42,11 @@ class FakeEngine:
             t = y / max(1, request.height - 1)
             colour = tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3))
             draw.line([(0, y), (request.width, y)], fill=colour)
+        if request.init_image is not None:
+            # Image to image, in spirit: the source shows through in proportion to how little strength was asked for.
+            source = request.init_image.convert("RGB").resize((request.width, request.height))
+            image = Image.blend(source, image, max(0.0, min(1.0, request.strength)))
+            draw = ImageDraw.Draw(image)
         draw.text((16, 16), request.prompt[:80], fill=(255, 255, 255))
         return image
 

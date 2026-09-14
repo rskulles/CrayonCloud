@@ -37,8 +37,10 @@ def build_parser() -> argparse.ArgumentParser:
     gen = sub.add_parser("generate", help="make one image from the command line")
     engine_args(gen)
     gen.add_argument("prompt")
-    gen.add_argument("--size", default="1024x1024")
+    gen.add_argument("--size", help="WxH; default 1024x1024, or the shape of --image")
     gen.add_argument("--seed", type=int)
+    gen.add_argument("--image", metavar="FILE", help="start from this picture instead of noise (image to image)")
+    gen.add_argument("--strength", type=float, default=0.6, help="how far to move away from --image: 0 gives it back, 1 ignores it (default 0.6)")
     gen.add_argument("--output", default="crayoncloud-{seed}.png")
     return parser
 
@@ -56,16 +58,25 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "generate":
         import random
+        from pathlib import Path
 
-        from .api import parse_size
+        from .api import DEFAULT_SIZE, decode_image, fit_size, parse_size
 
-        width, height = parse_size(args.size)
+        source = None
+        if args.image:
+            try:
+                source = decode_image(Path(args.image).read_bytes())
+            except (OSError, ValueError) as exc:
+                print(f"--image {args.image}: {exc}", file=sys.stderr)
+                return 2
+        width, height = parse_size(args.size) if args.size else fit_size(*source.size) if source else DEFAULT_SIZE
         seed = args.seed if args.seed is not None else random.randrange(2**31 - 1)
         started = time.monotonic()
-        image = engine.generate(GenerationRequest(prompt=args.prompt, width=width, height=height, steps=args.steps, seed=seed))
+        image = engine.generate(GenerationRequest(prompt=args.prompt, width=width, height=height, steps=args.steps, seed=seed, init_image=source, strength=args.strength))
         path = args.output.format(seed=seed)
         image.save(path)
-        print(f"{path}: {width}x{height}, seed {seed}, {time.monotonic() - started:.1f} s")
+        origin = f", from {args.image} at strength {args.strength:g}" if source else ""
+        print(f"{path}: {width}x{height}, seed {seed}{origin}, {time.monotonic() - started:.1f} s")
         return 0
 
     import uvicorn

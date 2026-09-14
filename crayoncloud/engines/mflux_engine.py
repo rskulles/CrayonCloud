@@ -5,6 +5,7 @@ from __future__ import annotations
 import gc
 import logging
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -132,14 +133,33 @@ class MfluxEngine:
 
     def generate(self, request: GenerationRequest) -> Image.Image:
         self.load(request.loras)
-        result = self._model.generate_image(
-            seed=request.seed,
-            prompt=request.prompt,
-            num_inference_steps=request.steps,
-            width=request.width,
-            height=request.height,
-            negative_prompt=request.negative_prompt,
-        )
+        source: str | None = None
+        img2img = {}
+        if request.init_image is not None and request.strength < 1.0:
+            # mflux wants a file, and its `image_strength` is how much of the source to keep: the denoising loop starts
+            # at step `steps * image_strength`. Our `strength` is A1111's denoising strength, how far to move away from
+            # the source, so the two are the same slider read from opposite ends. With Turbo's 8 steps that gives
+            # eight distinct settings; strength 0 skips the loop and hands back the source through the VAE.
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
+                request.init_image.save(handle, format="PNG")
+                source = handle.name
+            img2img = dict(image_path=source, image_strength=1.0 - request.strength)
+        try:
+            result = self._model.generate_image(
+                seed=request.seed,
+                prompt=request.prompt,
+                num_inference_steps=request.steps,
+                width=request.width,
+                height=request.height,
+                negative_prompt=request.negative_prompt,
+                **img2img,
+            )
+        finally:
+            if source is not None:
+                try:
+                    os.unlink(source)
+                except OSError:
+                    pass
         # mflux returns its GeneratedImage wrapper (with .image) or a bare PIL image depending on the version.
         image = getattr(result, "image", result)
         return image.convert("RGB")

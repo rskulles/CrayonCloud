@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crayoncloud"
-version = "0.1.9"
+version = "0.2.0"
 description = "A small self-hosted image generation server for Z-Image-Turbo with an OpenAI-compatible endpoint, built for ButterKnife."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -14,6 +14,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pillow>=10",
+    "python-multipart>=0.0.9",   # multipart form parsing for /v1/images/edits
 ]
 
 [project.optional-dependencies]

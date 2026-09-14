@@ -13,6 +13,8 @@ and answers the same request shape as the OpenAI images API, so [ButterKnife](ht
 - **Made for ButterKnife.** Add it as an image connection and type `/image a cat in a spacesuit` in any chat.
 - **Nothing to fiddle with.** No ComfyUI graphs, no web UI to click through. On a Mac it's a menu bar app that
   carries its own Python; elsewhere it's one command. Start it and forget it.
+- **Text to image and image to image.** Type a prompt, or start from a picture and say what should change, with a
+  strength slider that works like the one in Automatic1111. Styles (LoRAs) apply to both.
 - **At home on a Mac.** Apple Silicon runs the model through MLX with 8-bit weights. On an M4 Pro a 1024 × 1024
   image takes about a minute and a half at 8 steps, 1024 × 768 about a minute, 512 × 512 twenty seconds. Linux or
   Windows with an NVIDIA card works through PyTorch.
@@ -113,7 +115,7 @@ machine it runs on. The app is about 70 MB.
 
 ```bash
 git clone https://github.com/rskulles/CrayonCloud && cd CrayonCloud
-tools/make-macos-app.sh 0.1.9 dist      # the version goes into the bundle
+tools/make-macos-app.sh 0.2.0 dist      # the version goes into the bundle
 open dist                               # drag "Crayon Cloud.app" to Applications
 ```
 
@@ -132,6 +134,25 @@ the order does not change the result), or `/image a lighthouse --lora watercolor
 Changing the set of styles reloads the model, about five seconds; renders with the same set after that cost nothing
 extra. Adapters work on the 8-bit weights directly. mflux engine only.
 
+## Image to image
+
+Start from a picture instead of noise: the try-it page has a *Text to image* / *Image to image* switch at the top of
+the form. Pick *Image to image*, choose a picture, set the strength, write what should change, and generate. Every
+result has a *Use as source* button, so you can push a picture through several rounds. Leave *Size* blank and the
+result keeps the picture's shape (scaled into the 256 to 2048 range and rounded to multiples of 16); fill it in to
+reshape.
+
+**Strength** works the way it does in Automatic1111 and ComfyUI (denoising strength): 0 gives the picture back, 1
+ignores it and is plain text to image. Around 0.5 to 0.7 keeps the composition and changes the rest; 0.3 is a touch-up.
+Z-Image-Turbo renders in 8 steps, so the slider has eight distinct positions and anything in between rounds to one
+of them. A lower strength also means fewer steps, so it is faster than a plain render. From the command line:
+
+```bash
+crayoncloud generate "the same meadow at night under a full moon" --image docs/sample.png --strength 0.6
+```
+
+mflux engine only for now; the diffusers engine answers with an error.
+
 ## The API
 
 `POST /v1/images/generations` with a JSON body in the OpenAI shape, plus a few extras:
@@ -141,12 +162,48 @@ extra. Adapters work on the 8-bit weights directly. mflux engine only.
 ```
 
 The answer carries the PNG as `data[0].b64_json` (the only supported `response_format`), the seed used for each
-image, the `file` it was saved as, and a `crayoncloud` block with the model, size, steps, seconds taken and the
-styles used. `loras` on the request names adapters from the LoRA folder with an optional `scale` (see Styles). `GET /v1/models` lists the model,
-`GET /health` (or `/v1/status`) says whether it is loaded, busy and for how long. Sizes are rounded to multiples of 16
-between 256 and 2048. Requests queue; one image renders at a time.
+image, the `file` it was saved as, and a `crayoncloud` block with the model, size, steps, seconds taken, the styles
+used and the `source` picture (or `null`). `loras` on the request names adapters from the LoRA folder with an optional
+`scale` (see Styles). `GET /v1/models` lists the model, `GET /health` (or `/v1/status`) says whether it is loaded,
+busy and for how long. Sizes are rounded to multiples of 16 between 256 and 2048; `size` may be left out (1024 × 1024,
+or the source picture's shape). Requests queue; one image renders at a time.
 
 Z-Image-Turbo is guidance-distilled, so `negative_prompt` is accepted but ignored for it (the base model honours it).
+
+### Image to image over the API (for ButterKnife and friends)
+
+Two ways to send the source picture; both answer in exactly the same shape as generations.
+
+**`POST /v1/images/edits`**, OpenAI's edits endpoint, `multipart/form-data`. This is the one an OpenAI-compatible
+client already knows how to call:
+
+| Field | Required | What it is |
+|---|---|---|
+| `image` | yes | The picture file: PNG, JPEG or WebP, up to 32 MB. EXIF orientation is applied. |
+| `prompt` | yes | What the result should be |
+| `strength` | no | 0 to 1, default 0.6; see above |
+| `size` | no | `WxH`; leave out to keep the picture's shape |
+| `n`, `steps`, `seed`, `negative_prompt`, `model`, `response_format` | no | As for generations |
+| `loras` | no | The same list as for generations, as a JSON string: `[{"name": "watercolor", "scale": 0.8}]` |
+| `mask` | no | Not supported; sending one is a 400. There is no inpainting. |
+
+```bash
+curl -s http://127.0.0.1:8765/v1/images/edits -F image=@photo.jpg -F prompt="the same scene in winter" -F strength=0.55 \
+  | python3 -c "import sys,json,base64; d=json.load(sys.stdin); open('winter.png','wb').write(base64.b64decode(d['data'][0]['b64_json'])); print(d['crayoncloud'])"
+```
+
+**JSON, on `POST /v1/images/generations`**: add `"image"` with the picture as base64 (a `data:image/png;base64,…`
+URL is fine) and optionally `"strength"`. Handy for clients that cannot do multipart.
+
+```json
+{ "prompt": "the same scene in winter", "image": "iVBORw0KGgo…", "strength": 0.55 }
+```
+
+Either way the `crayoncloud` block of the answer carries `"source": {"width": 1024, "height": 768, "strength": 0.55}`
+(it is `null` for plain text to image), and a saved PNG has `source` and `strength` in its metadata next to the
+prompt and seed. Validation errors are 400 (not a picture, bad size, unknown LoRA is 404) or 422 (strength outside
+0 to 1, empty prompt). A ButterKnife `/image` with an attached picture would post to `/v1/images/edits` with the
+attachment as `image`, the message as `prompt`, and a `--strength` flag if the user gave one.
 
 ## Building from source
 
